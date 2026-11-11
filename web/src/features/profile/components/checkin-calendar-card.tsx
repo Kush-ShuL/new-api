@@ -324,9 +324,16 @@ export function CheckinCalendarCard({
                   </span>
                 </div>
                 <p className='text-muted-foreground mt-1 line-clamp-2 text-xs sm:text-sm'>
-                  {checkedToday && todayAward !== undefined
-                    ? `${t('Today')} +${formatQuotaWithCurrency(todayAward)}`
-                    : t('Check in daily to receive random quota rewards')}
+                  {checkedToday && todayAward !== undefined ? (
+                    <>
+                      {t('Today')} +
+                      <CurrencyText>
+                        {formatQuotaWithCurrency(todayAward)}
+                      </CurrencyText>
+                    </>
+                  ) : (
+                    t('Check in daily to receive random quota rewards')
+                  )}
                 </p>
               </div>
             </button>

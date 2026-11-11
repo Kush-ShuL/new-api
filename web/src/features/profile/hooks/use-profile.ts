@@ -124,6 +124,7 @@ export function useProfile() {
 
   return {
     profile,
+    setProfile,
     loading,
     updating,
     fetchProfile,

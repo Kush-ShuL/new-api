@@ -21,6 +21,7 @@ import { AreaChart, BarChart3, WalletCards } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { CurrencyText } from '@/components/currency-display'
 import { IconBadge } from '@/components/ui/icon-badge'
 import { useThemeCustomization } from '@/context/theme-customization-provider'
 import { useTheme } from '@/context/theme-provider'
@@ -128,7 +129,8 @@ export function ConsumptionDistributionChart(
           </IconBadge>
           <div className='text-sm font-semibold'>{t('Quota Distribution')}</div>
           <span className='text-muted-foreground text-xs'>
-            {t('Total:')} {chartData.totalQuotaDisplay}
+            {t('Total:')}{' '}
+            <CurrencyText>{chartData.totalQuotaDisplay}</CurrencyText>
           </span>
         </div>
 

@@ -32,13 +32,16 @@ import { handleServerError } from '@/lib/handle-server-error'
 
 export function ImageUpload(props: {
   value: string
-  onChange: (value: string) => void
+  onChange: (value: string) => void | Promise<void>
   label: string
   maxBytes: number
   disabled?: boolean
   onUpload?: (file: File) => Promise<string>
   onUploadingChange?: (uploading: boolean) => void
   preview?: ReactNode
+  renderTrigger?: (uploading: boolean) => ReactNode
+  triggerClassName?: string
+  clearable?: boolean
 }) {
   const { t } = useTranslation()
   const input = useRef<HTMLInputElement>(null)
@@ -71,7 +74,7 @@ export function ImageUpload(props: {
       setUploading(true)
       props.onUploadingChange?.(true)
       try {
-        props.onChange(await props.onUpload(file))
+        await props.onChange(await props.onUpload(file))
       } catch (error) {
         handleServerError(error, t('Failed to upload image'))
       } finally {
@@ -101,7 +104,7 @@ export function ImageUpload(props: {
         id={id}
         type='file'
         accept='image/png,image/jpeg,image/webp,image/gif'
-        className='sr-only'
+        className='hidden'
         disabled={props.disabled || uploading}
         onChange={(event) => void upload(event)}
         aria-label={props.label}
@@ -109,11 +112,16 @@ export function ImageUpload(props: {
       <Button
         type='button'
         variant='outline'
+        className={props.triggerClassName}
         disabled={props.disabled || uploading}
+        aria-label={props.renderTrigger ? props.label : undefined}
+        aria-busy={uploading || undefined}
         aria-controls={id}
         onClick={() => input.current?.click()}
       >
-        {props.value &&
+        {props.renderTrigger?.(uploading)}
+        {!props.renderTrigger &&
+          props.value &&
           (props.preview ?? (
             <img
               src={props.value}
@@ -121,9 +129,9 @@ export function ImageUpload(props: {
               className='size-7 rounded object-cover'
             />
           ))}
-        {uploading ? t('Uploading...') : props.label}
+        {!props.renderTrigger && (uploading ? t('Uploading...') : props.label)}
       </Button>
-      {props.value && (
+      {props.value && props.clearable !== false && (
         <Button
           type='button'
           variant='ghost'

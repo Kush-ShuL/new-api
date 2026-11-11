@@ -82,7 +82,7 @@ export function AvailabilityTable(props: { data: AvailabilityData }) {
 
   return (
     <StaticDataTable
-      className='availability-table isolate min-h-0 flex-1 overflow-auto rounded-xl border-[0.5px] [--availability-model-width:12rem] sm:[--availability-model-width:15rem]'
+      className='availability-table isolate min-h-0 flex-1 overflow-auto rounded-xl border-[0.5px] [--availability-model-width:calc(var(--spacing)*48)] sm:[--availability-model-width:calc(var(--spacing)*60)]'
       containerProps={{
         'data-table-scroll-viewport': true,
         onScroll: updateTableScrollClip,
@@ -94,7 +94,7 @@ export function AvailabilityTable(props: { data: AvailabilityData }) {
         withContainer: false,
         'aria-label': t('Hourly model availability'),
         style: {
-          width: `calc(var(--availability-model-width) + ${hours.length} * 6rem)`,
+          width: `calc(var(--availability-model-width) + ${hours.length * 24} * var(--spacing))`,
         },
       }}
       tableClassName='table-fixed border-separate border-spacing-0 [&_td]:border-r-[0.5px] [&_td]:border-b-[0.5px] [&_th]:border-r-[0.5px] [&_th]:border-b-[0.5px]'
@@ -115,7 +115,7 @@ export function AvailabilityTable(props: { data: AvailabilityData }) {
               className='bg-muted h-12 w-24 px-3 text-center'
               style={
                 {
-                  '--availability-column-left': `${columnIndex * 6}rem`,
+                  '--availability-column-left': `calc(${columnIndex * 24} * var(--spacing))`,
                 } as CSSProperties
               }
               title={
@@ -157,7 +157,7 @@ export function AvailabilityTable(props: { data: AvailabilityData }) {
                   data-availability-hour
                   style={
                     {
-                      '--availability-column-left': `${columnIndex * 6}rem`,
+                      '--availability-column-left': `calc(${columnIndex * 24} * var(--spacing))`,
                     } as CSSProperties
                   }
                   data-availability-level={getSuccessRateLevel(rate)}

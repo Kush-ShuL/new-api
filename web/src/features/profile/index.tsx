@@ -26,14 +26,13 @@ import { useAuthStore } from '@/stores/auth-store'
 
 import { CheckinCalendarCard } from './components/checkin-calendar-card'
 import { LanguagePreferencesCard } from './components/language-preferences-card'
-import { ProfileAvatarCard } from './components/profile-avatar-card'
 import { ProfileHeader } from './components/profile-header'
 import { ProfileSettingsCard } from './components/profile-settings-card'
 import { SidebarModulesCard } from './components/sidebar-modules-card'
 import { useProfile } from './hooks'
 
 export function Profile() {
-  const { profile, loading, refreshProfile } = useProfile()
+  const { profile, setProfile, loading, refreshProfile } = useProfile()
   const { status } = useStatus()
   const permissions = useAuthStore((s) => s.auth.user?.permissions)
 
@@ -52,16 +51,16 @@ export function Profile() {
       <div className='min-h-0 flex-1 overflow-auto px-3 py-3 sm:px-4 sm:py-6'>
         <CardStaggerContainer className='mx-auto flex w-full max-w-7xl flex-col gap-4 sm:gap-6'>
           <CardStaggerItem>
-            <ProfileHeader profile={profile} loading={loading} />
+            <ProfileHeader
+              profile={profile}
+              loading={loading}
+              onAvatarUpdate={setProfile}
+            />
           </CardStaggerItem>
 
           <CardStaggerItem>
             <div className='grid gap-4 sm:gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.46fr)] xl:items-start'>
               <div className='space-y-4 sm:space-y-6'>
-                <ProfileAvatarCard
-                  profile={profile}
-                  onUpdate={refreshProfile}
-                />
                 <ProfileSettingsCard
                   profile={profile}
                   loading={loading}

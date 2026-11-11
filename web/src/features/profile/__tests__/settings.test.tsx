@@ -24,7 +24,7 @@ import { ROLE } from '@/lib/roles'
 import { useAuthStore } from '@/stores/auth-store'
 
 import { updateUserSettings } from '../api'
-import { ProfileAvatarCard } from '../components/profile-avatar-card'
+import { ProfileHeader } from '../components/profile-header'
 import { NotificationTab } from '../components/tabs/notification-tab'
 import type { UserProfile } from '../types'
 
@@ -58,9 +58,12 @@ const settings = {
   upstream_model_update_notify_enabled: true,
 }
 
-afterEach(() => vi.restoreAllMocks())
+afterEach(() => {
+  vi.restoreAllMocks()
+  useAuthStore.setState(useAuthStore.getInitialState(), true)
+})
 
-it('uploads avatars through the user endpoint and saves only after confirmation', async () => {
+it('opens the picker from the profile avatar and saves the selected image immediately', async () => {
   const url = '/api/appearance/background/avatar.png'
   const post = vi
     .spyOn(api, 'post')
@@ -69,8 +72,20 @@ it('uploads avatars through the user endpoint and saves only after confirmation'
     data: { success: true, data: { ...profile, avatar_url: url } },
   })
   const onUpdate = vi.fn()
-  render(<ProfileAvatarCard profile={profile} onUpdate={onUpdate} />)
-  fireEvent.change(screen.getByLabelText('Upload avatar'), {
+  render(
+    <ProfileHeader
+      profile={profile}
+      loading={false}
+      onAvatarUpdate={onUpdate}
+    />
+  )
+  const input = screen.getByLabelText<HTMLInputElement>('Upload avatar', {
+    selector: 'input',
+  })
+  const openPicker = vi.spyOn(input, 'click')
+  fireEvent.click(screen.getByRole('button', { name: 'Upload avatar' }))
+  expect(openPicker).toHaveBeenCalledOnce()
+  fireEvent.change(input, {
     target: {
       files: [new File(['avatar'], 'avatar.png', { type: 'image/png' })],
     },
@@ -83,16 +98,49 @@ it('uploads avatars through the user endpoint and saves only after confirmation'
     )
   )
   await waitFor(() =>
-    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled()
-  )
-  expect(put).not.toHaveBeenCalled()
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }))
-  await waitFor(() =>
     expect(put).toHaveBeenCalledWith('/api/user/self/avatar', { url })
   )
-  await waitFor(() => expect(onUpdate).toHaveBeenCalledOnce())
+  await waitFor(() =>
+    expect(onUpdate).toHaveBeenCalledWith({ ...profile, avatar_url: url })
+  )
   expect(useAuthStore.getState().auth.user?.avatar_url).toBe(url)
-  useAuthStore.setState(useAuthStore.getInitialState(), true)
+})
+
+it('keeps the current avatar and allows another upload when saving fails', async () => {
+  vi.spyOn(api, 'post').mockResolvedValue({
+    data: {
+      success: true,
+      data: { url: '/api/appearance/background/new.png' },
+    },
+  })
+  vi.spyOn(api, 'put').mockRejectedValue(new Error('Upload save failed'))
+  const current = {
+    ...profile,
+    avatar_url: '/api/appearance/background/old.png',
+  }
+  useAuthStore.getState().auth.setUser(current)
+  const onUpdate = vi.fn()
+  render(
+    <ProfileHeader
+      profile={current}
+      loading={false}
+      onAvatarUpdate={onUpdate}
+    />
+  )
+  fireEvent.change(
+    screen.getByLabelText('Upload avatar', { selector: 'input' }),
+    {
+      target: {
+        files: [new File(['avatar'], 'avatar.png', { type: 'image/png' })],
+      },
+    }
+  )
+  await waitFor(() => expect(api.put).toHaveBeenCalled())
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Upload avatar' })).toBeEnabled()
+  )
+  expect(onUpdate).not.toHaveBeenCalled()
+  expect(useAuthStore.getState().auth.user?.avatar_url).toBe(current.avatar_url)
 })
 
 /** The body a PUT sends over the wire: undefined fields are left out. */
