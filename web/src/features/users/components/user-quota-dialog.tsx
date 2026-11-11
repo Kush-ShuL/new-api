@@ -20,6 +20,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
+import { CurrencyText } from '@/components/currency-display'
 import { Dialog } from '@/components/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -160,7 +161,7 @@ export function UserQuotaDialog(props: UserQuotaDialogProps) {
 
         <div className='space-y-2'>
           <Label>
-            {t('Amount')} ({currencyLabel})
+            {t('Amount')} (<CurrencyText>{currencyLabel}</CurrencyText>)
           </Label>
           <Input
             type='number'

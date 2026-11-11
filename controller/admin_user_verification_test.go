@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
@@ -27,6 +28,45 @@ func setupAdminUserTest(t *testing.T) (*model.User, service.AuthIdentity, *model
 	target := &model.User{Username: "managed-user", Password: password, Role: common.RoleCommonUser, Status: common.UserStatusEnabled, Group: "default", AuthVersion: 1, AffCode: "managed-aff", GitHubId: "managed-github"}
 	require.NoError(t, model.DB.Create(target).Error)
 	return operator, identity, target
+}
+
+func TestUnauthorizedRootDeletionRequiresCanonicalRootAndBoundProof(t *testing.T) {
+	operator, identity, target := setupAdminUserTest(t)
+	require.Equal(t, 1, operator.Id)
+	require.NoError(t, model.DB.AutoMigrate(&model.Token{}, &model.ExternalIdentityClaim{}))
+	require.NoError(t, model.DB.Model(target).Updates(map[string]any{"role": common.RoleRootUser, "status": common.UserStatusDisabled}).Error)
+	params := gin.Params{{Key: "id", Value: fmt.Sprint(target.Id)}}
+	request := func(proof string, actor service.AuthIdentity, role int) *httptest.ResponseRecorder {
+		return adminUserRequest(http.MethodDelete, "/api/user/:id", "", proof, actor, role, params, DeleteUser)
+	}
+	assert.Equal(t, http.StatusForbidden, request("", identity, common.RoleRootUser).Code)
+	var count int64
+	require.NoError(t, model.DB.Model(&model.User{}).Where("id = ?", target.Id).Count(&count).Error)
+	assert.Equal(t, int64(1), count)
+	wrongTarget := service.VerificationOperation{Scope: service.VerificationScopeAdminUserDelete, Context: []byte(`{"user_id":1}`)}
+	wrongProof := issueSecurityEnrollmentProof(t, identity, wrongTarget, service.VerificationMethodPassword)
+	assert.Equal(t, http.StatusForbidden, request(wrongProof, identity, common.RoleRootUser).Code)
+	operation := service.VerificationOperation{Scope: service.VerificationScopeAdminUserDelete, Context: []byte(fmt.Sprintf(`{"user_id":%d}`, target.Id))}
+	expiredProof := issueSecurityEnrollmentProof(t, identity, operation, service.VerificationMethodPassword)
+	require.NoError(t, model.DB.Model(&model.AuthFlow{}).Where("purpose = ?", model.AuthFlowPurposeSecurityProof).Update("expires_at", time.Now().Add(-time.Minute)).Error)
+	assert.Equal(t, http.StatusForbidden, request(expiredProof, identity, common.RoleRootUser).Code)
+	proof := issueSecurityEnrollmentProof(t, identity, operation, service.VerificationMethodPassword)
+	other := identity
+	other.UserID = target.Id
+	response := request(proof, other, common.RoleRootUser)
+	assert.Contains(t, response.Body.String(), "No permission")
+	response = request(proof, identity, common.RoleRootUser)
+	assert.Equal(t, http.StatusOK, response.Code)
+	assert.Contains(t, response.Body.String(), `"success":true`)
+	require.NoError(t, model.DB.Unscoped().Model(&model.User{}).Where("id = ?", target.Id).Count(&count).Error)
+	assert.Zero(t, count)
+	assert.Error(t, service.ValidateStepUpIdentity(other))
+	// A consumed proof cannot delete a subsequently inserted account at the
+	// same ID; every deletion needs a fresh verification ceremony.
+	require.NoError(t, model.DB.Create(&model.User{Id: target.Id, Username: "recreated-rogue", Role: common.RoleRootUser, Status: common.UserStatusDisabled, AuthVersion: 1, AffCode: "recreated-rogue"}).Error)
+	response = request(proof, identity, common.RoleRootUser)
+	assert.Equal(t, http.StatusForbidden, response.Code)
+	assert.Contains(t, response.Body.String(), "SECURITY_PROOF_CONSUMED")
 }
 
 // adminUserRequest drives an admin user-management handler with the operator

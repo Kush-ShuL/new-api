@@ -38,7 +38,6 @@ import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuCheckboxItem,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuShortcut,
@@ -110,8 +109,7 @@ export function ChannelsPrimaryButtons() {
     <>
       <div className='flex flex-wrap items-center gap-2'>
         <div ref={setPriorityActionContainer} className='empty:hidden' />
-        {/* Desktop: Toggle switches visible */}
-        <div className='bg-muted/40 hidden h-8 shrink-0 items-center gap-2.5 rounded-lg border px-2.5 sm:flex'>
+        <div className='bg-muted/40 flex min-h-8 shrink-0 flex-wrap items-center gap-2.5 rounded-lg border px-2.5 py-1'>
           <div className='text-muted-foreground has-data-checked:text-foreground flex items-center gap-2'>
             <Label
               htmlFor='channel-batch-mode'
@@ -189,27 +187,6 @@ export function ChannelsPrimaryButtons() {
             <MoreHorizontal className='size-4' aria-hidden />
           </DropdownMenuTrigger>
           <DropdownMenuContent align='end' className='w-56'>
-            {/* Mobile-only: toggle switches */}
-            <DropdownMenuCheckboxItem
-              className='sm:hidden'
-              checked={batchMode}
-              onCheckedChange={handleBatchModeToggle}
-            >
-              <ListChecks className='mr-2 h-4 w-4' />
-              {t('Batch Operations')}
-            </DropdownMenuCheckboxItem>
-
-            <DropdownMenuCheckboxItem
-              className='sm:hidden'
-              checked={enableTagMode}
-              onCheckedChange={handleTagModeToggle}
-            >
-              <Tags className='mr-2 h-4 w-4' />
-              {t('Tag Mode')}
-            </DropdownMenuCheckboxItem>
-
-            <DropdownMenuSeparator className='sm:hidden' />
-
             <DropdownMenuItem
               onClick={() => {
                 handleTestAllChannels(queryClient)

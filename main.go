@@ -367,6 +367,16 @@ func InitResources() error {
 	}
 
 	service.StartAuthArtifactCleanup()
+	if _, err := model.QuarantineUnauthorizedRootUsers(); err != nil {
+		return err
+	}
+	go func() {
+		for range time.Tick(time.Minute) {
+			if _, err := model.QuarantineUnauthorizedRootUsers(); err != nil {
+				common.SysError(common.LogText("Root account protection failed: %v", err))
+			}
+		}
+	}()
 
 	return nil
 }

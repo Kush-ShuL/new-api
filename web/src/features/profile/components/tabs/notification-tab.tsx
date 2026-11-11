@@ -18,9 +18,10 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { Bell, Loader2, Mail, Server, Webhook } from 'lucide-react'
 import { useState, useEffect, useCallback } from 'react'
-import { useTranslation } from 'react-i18next'
+import { Trans, useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
+import { CurrencyText } from '@/components/currency-display'
 import { PasswordInput } from '@/components/password-input'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -339,7 +340,8 @@ export function NotificationTab({
                   {quotaWarningEnabled && (
                     <SettingsControlChildren className='space-y-1.5 pb-1'>
                       <Label htmlFor='threshold'>
-                        {t('Reminder threshold')} ({getCurrencyLabel()})
+                        {t('Reminder threshold')} (
+                        <CurrencyText>{getCurrencyLabel()}</CurrencyText>)
                       </Label>
                       <Input
                         id='threshold'
@@ -363,9 +365,18 @@ export function NotificationTab({
                         )}
                       />
                       <p className='text-muted-foreground text-xs'>
-                        {t('Leave empty to use the site default ({{amount}})', {
-                          amount: formatQuota(quotaRemindThreshold),
-                        })}
+                        <Trans
+                          i18nKey='Leave empty to use the site default (<amount></amount>)'
+                          components={{
+                            amount: (
+                              <span>
+                                <CurrencyText>
+                                  {formatQuota(quotaRemindThreshold)}
+                                </CurrencyText>
+                              </span>
+                            ),
+                          }}
+                        />
                       </p>
                     </SettingsControlChildren>
                   )}

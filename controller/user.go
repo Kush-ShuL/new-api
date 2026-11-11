@@ -937,7 +937,8 @@ func DeleteUser(c *gin.Context) {
 		return
 	}
 	myRole := c.GetInt("role")
-	if myRole <= originUser.Role {
+	unauthorizedRoot := c.GetInt("id") == 1 && myRole == common.RoleRootUser && originUser.Id != 1 && originUser.Role >= common.RoleRootUser && originUser.Status == common.UserStatusDisabled
+	if !unauthorizedRoot && myRole <= originUser.Role {
 		common.ApiErrorT(c, "No permission to update users of same or higher permission level")
 		return
 	}
@@ -945,7 +946,12 @@ func DeleteUser(c *gin.Context) {
 	if authorization == nil {
 		return
 	}
-	revokedAccessTokens, err := model.HardDeleteUserById(id)
+	var revokedAccessTokens int64
+	if unauthorizedRoot {
+		revokedAccessTokens, err = model.HardDeleteUnauthorizedRootUserByID(id)
+	} else {
+		revokedAccessTokens, err = model.HardDeleteUserById(id)
+	}
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -961,6 +967,19 @@ func DeleteUser(c *gin.Context) {
 		"message": "",
 	})
 	return
+}
+
+func GetRootSecurityAlerts(c *gin.Context) {
+	if c.GetInt("id") != 1 || c.GetInt("role") != common.RoleRootUser {
+		c.AbortWithStatus(http.StatusForbidden)
+		return
+	}
+	users, err := model.QuarantineUnauthorizedRootUsers()
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, users)
 }
 
 func DeleteSelf(c *gin.Context) {

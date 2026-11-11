@@ -366,9 +366,10 @@ it('keeps prices and channel explanations readable in the mobile card and detail
   const price = screen.getByRole('button', {
     name: 'View pricing for catalog-only',
   })
-  expect(within(price).getByText('1.25')).toHaveClass('whitespace-normal')
-  expect(within(price).getByText('USD / 1M tokens')).toHaveClass(
-    'whitespace-normal'
+  expect(within(price).getByText('1.25')).toHaveAttribute('title', '1.25')
+  expect(within(price).getByText('USD / 1M tokens')).toHaveAttribute(
+    'title',
+    'USD / 1M tokens'
   )
   expect(screen.getByText('Channels 0 · Groups 0')).toHaveClass(
     'whitespace-normal'

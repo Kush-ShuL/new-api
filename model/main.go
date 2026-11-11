@@ -77,6 +77,7 @@ func createRootAccountIfNeed() error {
 			return err
 		}
 		rootUser := User{
+			Id:          1,
 			Username:    "root",
 			Password:    hashedPassword,
 			Role:        common.RoleRootUser,

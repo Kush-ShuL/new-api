@@ -45,10 +45,28 @@ export function CurrencyIcon(props: { fallback?: boolean }): ReactNode {
 
 // Keep numeric precision and plain-text formatting in the currency library.
 // Only replace a formatted custom-currency prefix at the point of rendering.
-export function CurrencyText(props: { children: ReactNode }): ReactNode {
+export function CurrencyText(props: {
+  children: ReactNode
+  label?: boolean
+}): ReactNode {
   const currency = useSystemConfigStore((state) => state.config.currency)
   const symbol = currency.customCurrencySymbol
   const text = props.children
+  if (
+    props.label &&
+    currency.quotaDisplayType === 'CUSTOM' &&
+    currency.customCurrencyIcon &&
+    symbol &&
+    typeof text === 'string' &&
+    text.endsWith(`(${symbol})`)
+  ) {
+    return (
+      <span className='inline-flex items-baseline whitespace-nowrap'>
+        {text.slice(0, -symbol.length - 1)}
+        <CurrencyIcon fallback />)
+      </span>
+    )
+  }
   if (
     currency.quotaDisplayType !== 'CUSTOM' ||
     !currency.customCurrencyIcon ||
@@ -62,9 +80,14 @@ export function CurrencyText(props: { children: ReactNode }): ReactNode {
     return props.children
   }
   return (
-    <>
+    <span className='inline-flex max-w-full items-baseline align-baseline whitespace-nowrap'>
       <CurrencyIcon fallback />
-      {text.slice(symbol.length).trimStart()}
-    </>
+      <span
+        className='min-w-0 truncate'
+        title={text.slice(symbol.length).trimStart()}
+      >
+        {text.slice(symbol.length).trimStart()}
+      </span>
+    </span>
   )
 }

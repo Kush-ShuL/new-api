@@ -242,16 +242,16 @@ export function ModelPriceCell(props: {
         {metrics.map((metric) => (
           <span
             key={metric.label}
-            className='flex min-w-0 flex-col items-start gap-y-0.5 sm:flex-row sm:flex-wrap sm:items-baseline sm:gap-x-1.5'
+            className='flex min-w-0 items-baseline gap-x-1.5'
           >
             <span
-              className='text-muted-foreground min-w-0 truncate text-xs font-normal'
+              className='text-muted-foreground shrink-0 text-xs font-normal'
               title={metric.label}
             >
               {metric.label}
             </span>
             <span
-              className='min-w-0 font-mono text-sm break-words whitespace-normal tabular-nums'
+              className='min-w-0 truncate font-mono text-sm tabular-nums'
               title={metric.value}
             >
               <CurrencyText>{metric.value}</CurrencyText>
@@ -260,7 +260,7 @@ export function ModelPriceCell(props: {
         ))}
       </span>
       <span
-        className='text-muted-foreground block text-xs font-normal break-words whitespace-normal sm:truncate'
+        className='text-muted-foreground block truncate text-xs font-normal'
         title={caption}
       >
         <CurrencyText>{caption}</CurrencyText>

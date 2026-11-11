@@ -994,6 +994,17 @@ func (user *User) delete(identity *AuthSessionIdentity) (int64, error) {
 }
 
 func (user *User) HardDelete() (int64, error) {
+	return user.hardDelete(false)
+}
+
+func HardDeleteUnauthorizedRootUserByID(userID int) (int64, error) {
+	if userID <= 1 {
+		return 0, ErrUnauthorizedRootUser
+	}
+	return (&User{Id: userID}).hardDelete(true)
+}
+
+func (user *User) hardDelete(unauthorizedRootOnly bool) (int64, error) {
 	if user.Id == 0 {
 		return 0, common.NewMessage("ID is empty!")
 	}
@@ -1001,6 +1012,16 @@ func (user *User) HardDelete() (int64, error) {
 	var deletedAuthVersion int64
 	var revokedAccessTokens int64
 	err := DB.Transaction(func(tx *gorm.DB) error {
+		var current User
+		if err := lockForUpdate(tx.Unscoped()).Select("id", "role", "status").Where("id = ?", user.Id).First(&current).Error; err != nil {
+			return err
+		}
+		if current.Id == 1 && current.Role >= common.RoleRootUser {
+			return ErrCannotDeleteRootUser
+		}
+		if unauthorizedRootOnly && (current.Id == 1 || current.Role < common.RoleRootUser || current.Status != common.UserStatusDisabled) {
+			return ErrUnauthorizedRootUser
+		}
 		var err error
 		deletedAuthVersion, err = IncrementUserAuthVersionWithTx(tx, user.Id)
 		if err != nil {
@@ -1530,7 +1551,7 @@ func (user *User) FillUserByLinuxDOId() error {
 
 func RootUserExists() bool {
 	var user User
-	err := DB.Where("role = ?", common.RoleRootUser).First(&user).Error
+	err := DB.Where("id = ? AND role = ?", 1, common.RoleRootUser).First(&user).Error
 	if err != nil {
 		return false
 	}

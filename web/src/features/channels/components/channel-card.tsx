@@ -75,7 +75,7 @@ function ChannelCardComponent({
   const responseCell = renderCell('response_time')
   const testCell = renderCell('test_time')
 
-  const labelClass = 'text-muted-foreground text-[11px] font-medium select-none'
+  const labelClass = 'text-muted-foreground text-xs font-medium select-none'
 
   // In card view the enable/disable state is already conveyed by the inline
   // power toggle, so the plain "Enabled"/"Disabled" badge is redundant. Keep
@@ -89,7 +89,7 @@ function ChannelCardComponent({
     <ChannelRowActionsLayoutContext.Provider value='card'>
       <div
         data-state={isSelected ? 'selected' : undefined}
-        className='flex min-w-0 flex-col gap-3'
+        className='flex h-full min-w-0 flex-col gap-3'
       >
         {/* Row 1: selection + type, with status badge + actions menu */}
         <div className='flex items-center justify-between gap-2'>
@@ -102,7 +102,6 @@ function ChannelCardComponent({
           </div>
           <div className='flex shrink-0 items-center gap-1.5'>
             {showStatusBadge && statusCell}
-            {actionsCell}
           </div>
         </div>
 
@@ -157,7 +156,7 @@ function ChannelCardComponent({
         </StatusBadgeTypeContext.Provider>
 
         {/* Groups retain their compact, full-width footer. */}
-        <div className='min-w-0'>
+        <div className='mt-auto flex min-w-0 flex-wrap items-center justify-between gap-2 pt-1'>
           {groups.length > 0 ? (
             <div className='-ml-1.5 flex min-w-0 flex-wrap gap-1'>
               {groups.map((g) => (
@@ -172,6 +171,7 @@ function ChannelCardComponent({
           ) : (
             <span className='text-muted-foreground text-sm'>-</span>
           )}
+          {actionsCell}
         </div>
       </div>
     </ChannelRowActionsLayoutContext.Provider>

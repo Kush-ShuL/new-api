@@ -88,6 +88,7 @@ func PostSetup(c *gin.Context) {
 			return
 		}
 		rootUser := model.User{
+			Id:          1,
 			Username:    req.Username,
 			Password:    hashedPassword,
 			Role:        common.RoleRootUser,

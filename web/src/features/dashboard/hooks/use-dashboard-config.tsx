@@ -29,6 +29,7 @@ import {
   Activity,
   type LucideIcon,
 } from 'lucide-react'
+import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import type { IconBadgeTone } from '@/components/ui/icon-badge'
@@ -112,7 +113,7 @@ export function useSummaryCardsConfig(totals: {
   todayUsageDisplay: string
   usedDisplay: string
   requestCountDisplay: string
-  currencyLabel: string
+  currencyLabel: ReactNode
   currencyEnabled: boolean
 }) {
   const { t } = useTranslation()
@@ -122,18 +123,26 @@ export function useSummaryCardsConfig(totals: {
       key: 'todayUsage',
       title: t('Last 24h usage'),
       value: totals.todayUsageDisplay,
-      description: totals.currencyEnabled
-        ? `${t('Consumed in the last 24 hours')} (${totals.currencyLabel})`
-        : t('Consumed in the last 24 hours'),
+      description: totals.currencyEnabled ? (
+        <>
+          {t('Consumed in the last 24 hours')} ({totals.currencyLabel})
+        </>
+      ) : (
+        t('Consumed in the last 24 hours')
+      ),
       icon: Flame,
     },
     {
       key: 'usage',
       title: t('Historical Usage'),
       value: totals.usedDisplay,
-      description: totals.currencyEnabled
-        ? `${t('Total consumed')} (${totals.currencyLabel})`
-        : t('Total consumed quota'),
+      description: totals.currencyEnabled ? (
+        <>
+          {t('Total consumed')} ({totals.currencyLabel})
+        </>
+      ) : (
+        t('Total consumed quota')
+      ),
       icon: TrendingUp,
     },
     {

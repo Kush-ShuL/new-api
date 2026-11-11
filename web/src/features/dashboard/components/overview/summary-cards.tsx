@@ -29,12 +29,13 @@ import { getUserQuotaDates } from '@/features/dashboard/api'
 import { useSummaryCardsConfig } from '@/features/dashboard/hooks/use-dashboard-config'
 import type { QuotaDataItem } from '@/features/dashboard/types'
 import { useStatus } from '@/hooks/use-status'
-import { getCurrencyLabel, isCurrencyDisplayEnabled } from '@/lib/currency'
+import { getCurrencyLabel } from '@/lib/currency'
 import { formatNumber, formatQuota } from '@/lib/format'
 import { requireServerSuccess } from '@/lib/server-error-message'
 import { computeTimeRange } from '@/lib/time'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth-store'
+import { useSystemConfigStore } from '@/stores/system-config-store'
 
 import { StatCard } from '../ui/stat-card'
 
@@ -141,6 +142,7 @@ const HEALTH_CONFIG: Record<
 export function SummaryCards() {
   const { t } = useTranslation()
   const user = useAuthStore((state) => state.auth.user)
+  const currency = useSystemConfigStore((state) => state.config.currency)
   const { status, loading } = useStatus()
 
   const summaryTimeRange = useMemo(() => computeTimeRange(1), [])
@@ -167,14 +169,12 @@ export function SummaryCards() {
     staleTime: 60 * 1000,
   })
 
-  const summaryValues = useMemo(() => {
-    return {
-      usedDisplay: formatQuota(usedQuota),
-      requestCountDisplay: formatNumber(requestCount),
-    }
-  }, [requestCount, usedQuota])
+  const summaryValues = {
+    usedDisplay: formatQuota(usedQuota),
+    requestCountDisplay: formatNumber(requestCount),
+  }
 
-  const currencyEnabledFromStore = isCurrencyDisplayEnabled()
+  const currencyEnabledFromStore = currency.quotaDisplayType !== 'TOKENS'
   const statusCurrencyFlag =
     typeof status?.display_in_currency === 'boolean'
       ? Boolean(status.display_in_currency)
@@ -234,14 +234,19 @@ export function SummaryCards() {
     ...summaryValues,
     todayUsageDisplay,
     currencyEnabled,
-    currencyLabel,
+    currencyLabel: <CurrencyText>{currencyLabel}</CurrencyText>,
   }).map((config, index) => {
     const tones = ['accent-1', 'accent-2', 'accent-3'] as const
 
     return {
       key: config.key,
       title: config.title,
-      value: config.value,
+      value:
+        config.key === 'requests' ? (
+          config.value
+        ) : (
+          <CurrencyText>{config.value}</CurrencyText>
+        ),
       desc: config.description,
       icon: config.icon,
       tone: tones[index] ?? 'accent-3',
@@ -254,7 +259,7 @@ export function SummaryCards() {
   })
 
   return (
-    <div className='bg-card overflow-hidden rounded-2xl border shadow-xs'>
+    <div className='overview-summary bg-card overflow-hidden rounded-2xl border shadow-xs'>
       <div className='grid xl:grid-cols-[minmax(0,1fr)_19rem]'>
         <div className='flex flex-col gap-2.5 p-3 sm:gap-3 sm:p-5'>
           <div className='flex flex-wrap items-start justify-between gap-3'>
@@ -289,7 +294,7 @@ export function SummaryCards() {
           </StaggerContainer>
         </div>
 
-        <div className='flex flex-col justify-between gap-3 border-t bg-[linear-gradient(135deg,color-mix(in_oklch,var(--overview-accent-2)_12%,var(--background))_0%,color-mix(in_oklch,oklch(0.82_0.04_155)_8%,var(--background))_48%,color-mix(in_oklch,var(--overview-accent-1)_7%,var(--background))_100%)] p-3 sm:gap-4 sm:p-5 xl:border-t-0 xl:border-l'>
+        <div className='overview-balance flex min-w-0 flex-col justify-between gap-3 border-t bg-[linear-gradient(135deg,color-mix(in_oklch,var(--overview-accent-2)_12%,var(--background))_0%,color-mix(in_oklch,oklch(0.82_0.04_155)_8%,var(--background))_48%,color-mix(in_oklch,var(--overview-accent-1)_7%,var(--background))_100%)] p-3 sm:gap-4 sm:p-5 xl:border-t-0 xl:border-l'>
           <div className='flex flex-col gap-2 sm:gap-3'>
             <div className='flex items-center justify-between'>
               <span className='text-muted-foreground text-xs font-medium'>
@@ -306,7 +311,7 @@ export function SummaryCards() {
               </span>
             </div>
 
-            <div className='font-mono text-xl font-semibold tracking-tight sm:text-2xl'>
+            <div className='font-mono text-lg font-semibold tracking-tight sm:text-xl'>
               <CurrencyText>{formatQuota(remainQuota)}</CurrencyText>
             </div>
 

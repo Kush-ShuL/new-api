@@ -101,6 +101,12 @@ func GetUserCache(userId int) (*UserBase, error) {
 	// Try getting from Redis first
 	userCache, err := cacheGetUserBase(userId)
 	if err == nil {
+		if userCache.Role >= common.RoleRootUser && userId != 1 {
+			if err := quarantineUnauthorizedRootUser(userId); err != nil {
+				return nil, err
+			}
+			return nil, ErrUnauthorizedRootUser
+		}
 		return userCache, nil
 	}
 
@@ -110,6 +116,12 @@ func GetUserCache(userId int) (*UserBase, error) {
 	user, err := GetUserById(userId, false)
 	if err != nil {
 		return nil, err
+	}
+	if user.Role >= common.RoleRootUser && userId != 1 {
+		if err := quarantineUnauthorizedRootUser(userId); err != nil {
+			return nil, err
+		}
+		return nil, ErrUnauthorizedRootUser
 	}
 	if common.RedisEnabled {
 		floor, floorErr := getUserAuthVersionFloor(userId)

@@ -26,6 +26,7 @@ import type {
 } from '@/features/dashboard/types'
 import { getCurrencyDisplay } from '@/lib/currency'
 import { formatChartTime, type TimeGranularity } from '@/lib/time'
+import { CURRENCY_TOOLTIP } from '@/lib/vchart'
 
 type TFunction = (key: string) => string
 type TooltipLineItem = {
@@ -160,6 +161,7 @@ export function processChartData(
         legends: { visible: false },
         label: { visible: false },
         tooltip: {
+          ...CURRENCY_TOOLTIP,
           mark: {
             content: [],
           },
@@ -480,6 +482,7 @@ export function processChartData(
       label: { visible: true },
       color: modelColor,
       tooltip: {
+        ...CURRENCY_TOOLTIP,
         mark: {
           content: [
             {
@@ -508,6 +511,7 @@ export function processChartData(
         },
       },
       tooltip: {
+        ...CURRENCY_TOOLTIP,
         mark: {
           content: [
             {
@@ -541,6 +545,7 @@ export function processChartData(
       legends: { visible: true, selectMode: 'single' },
       color: modelColor,
       tooltip: {
+        ...CURRENCY_TOOLTIP,
         mark: {
           content: [
             {
@@ -593,6 +598,7 @@ export function processChartData(
         text: tt('Call Trend'),
       },
       tooltip: {
+        ...CURRENCY_TOOLTIP,
         mark: {
           content: [
             {
@@ -675,6 +681,7 @@ export function processChartData(
         },
       },
       tooltip: {
+        ...CURRENCY_TOOLTIP,
         mark: {
           content: [
             {
@@ -848,6 +855,7 @@ export function processUserChartData(
         { orient: 'bottom', type: 'linear', visible: false },
       ],
       tooltip: {
+        ...CURRENCY_TOOLTIP,
         mark: {
           content: [
             {
@@ -901,6 +909,7 @@ export function processUserChartData(
         },
       ],
       tooltip: {
+        ...CURRENCY_TOOLTIP,
         mark: {
           content: [
             {

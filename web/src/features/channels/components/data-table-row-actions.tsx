@@ -162,34 +162,39 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
   }
 
   return (
-    <div className='-ml-1.5 flex items-center gap-1'>
-      {layout !== 'card' && (
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                variant='ghost'
-                size='icon-sm'
-                onClick={(e) => {
-                  e.stopPropagation()
-                  handleEdit()
-                }}
-                aria-label={t('Edit')}
-              />
-            }
-          >
-            <Pencil className='size-4' />
-          </TooltipTrigger>
-          <TooltipContent>{t('Edit')}</TooltipContent>
-        </Tooltip>
-      )}
+    <div
+      className={
+        layout === 'card'
+          ? 'flex flex-wrap items-center gap-1'
+          : '-ml-1.5 flex items-center gap-1'
+      }
+    >
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Button
+              variant={layout === 'card' ? 'outline' : 'ghost'}
+              size={layout === 'card' ? 'sm' : 'icon-sm'}
+              onClick={(e) => {
+                e.stopPropagation()
+                handleEdit()
+              }}
+              aria-label={t('Edit')}
+            />
+          }
+        >
+          <Pencil className='size-4' />
+          {layout === 'card' && <span>{t('Edit')}</span>}
+        </TooltipTrigger>
+        <TooltipContent>{t('Edit')}</TooltipContent>
+      </Tooltip>
 
       <Tooltip>
         <TooltipTrigger
           render={
             <Button
-              variant='ghost'
-              size='icon-sm'
+              variant={layout === 'card' ? 'outline' : 'ghost'}
+              size={layout === 'card' ? 'sm' : 'icon-sm'}
               onClick={handleDirectTest}
               disabled={isTesting}
               aria-label={t('Test Connection')}
@@ -201,37 +206,17 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
           ) : (
             <Gauge className='size-4' />
           )}
+          {layout === 'card' && <span>{t('Test Connection')}</span>}
         </TooltipTrigger>
         <TooltipContent>{t('Test Connection')}</TooltipContent>
       </Tooltip>
-
-      {layout === 'card' && (
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                variant='ghost'
-                size='icon-sm'
-                onClick={(e) => {
-                  e.stopPropagation()
-                  handleTest()
-                }}
-                aria-label={t('Test Channel Connection')}
-              />
-            }
-          >
-            <PlugZap className='size-4' />
-          </TooltipTrigger>
-          <TooltipContent>{t('Test Channel Connection')}</TooltipContent>
-        </Tooltip>
-      )}
 
       <Tooltip>
         <TooltipTrigger
           render={
             <Button
-              variant='ghost'
-              size='icon-sm'
+              variant={layout === 'card' ? 'outline' : 'ghost'}
+              size={layout === 'card' ? 'sm' : 'icon-sm'}
               onClick={handleToggleStatus}
               disabled={isTogglingStatus}
               aria-label={isEnabled ? t('Disable') : t('Enable')}
@@ -244,6 +229,9 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
           }
         >
           {statusIcon}
+          {layout === 'card' && (
+            <span>{isEnabled ? t('Disable') : t('Enable')}</span>
+          )}
         </TooltipTrigger>
         <TooltipContent>
           {isEnabled ? t('Disable') : t('Enable')}
@@ -263,15 +251,6 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
           <span className='sr-only'>{t('Open menu')}</span>
         </DropdownMenuTrigger>
         <DropdownMenuContent align='end' className='w-48'>
-          {layout === 'card' && (
-            <DropdownMenuItem onClick={handleEdit}>
-              {t('Edit')}
-              <DropdownMenuShortcut>
-                <Pencil size={16} />
-              </DropdownMenuShortcut>
-            </DropdownMenuItem>
-          )}
-
           {/* Test Connection */}
           <DropdownMenuItem onClick={handleTest}>
             {t('Test Connection')}

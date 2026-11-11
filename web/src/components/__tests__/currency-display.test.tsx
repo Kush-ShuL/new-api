@@ -16,12 +16,14 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
+import { Trans } from 'react-i18next'
 import { afterEach, expect, test } from 'vitest'
 
 import { CurrencyText } from '@/components/currency-display'
 import { formatBillingCurrencyFromUSD } from '@/lib/currency'
 import { mapStatusDataToConfig } from '@/lib/status-query'
+import { CURRENCY_TOOLTIP } from '@/lib/vchart'
 import {
   DEFAULT_CURRENCY_CONFIG,
   useSystemConfigStore,
@@ -47,6 +49,10 @@ test('uses the uploaded icon from status without changing the formatted amount',
     '/api/appearance/background/coin.png'
   )
   expect(view.container).toHaveTextContent('1.23456')
+  expect(screen.getByRole('img').parentElement).toHaveClass(
+    'inline-flex',
+    'whitespace-nowrap'
+  )
   fireEvent.error(screen.getByRole('img'))
   expect(screen.queryByRole('img')).not.toBeInTheDocument()
   expect(view.container).toHaveTextContent(formatted)
@@ -61,6 +67,32 @@ test('uses the uploaded icon from status without changing the formatted amount',
   expect(screen.getByRole('img')).toHaveAttribute(
     'src',
     '/api/appearance/background/replacement.png'
+  )
+})
+
+test('replaces monetary chart values without changing model names or precision', () => {
+  useSystemConfigStore.getState().setConfig({
+    currency: {
+      ...DEFAULT_CURRENCY_CONFIG,
+      quotaDisplayType: 'CUSTOM',
+      customCurrencySymbol: 'Credits',
+      customCurrencyIcon: '/coin.png',
+    },
+  })
+  const tooltip = document.createElement('div')
+  tooltip.innerHTML =
+    '<div data-col="key"><div>Credits model</div></div><div data-col="value"><div>Credits0.9245</div><div>42</div></div>'
+  CURRENCY_TOOLTIP.updateElement(tooltip)
+  const image = within(tooltip).getByRole('img')
+  expect(image).toHaveAttribute('src', '/coin.png')
+  expect(image.parentElement).toHaveTextContent('0.9245')
+  expect(tooltip.querySelector('[data-col="key"]')).toHaveTextContent(
+    'Credits model'
+  )
+  expect(tooltip.querySelectorAll('img')).toHaveLength(1)
+  fireEvent.error(image)
+  expect(tooltip.querySelector('[data-col="value"]')).toHaveTextContent(
+    'Credits0.9245'
   )
 })
 
@@ -86,4 +118,33 @@ test('keeps text symbols when no image is configured and for other currencies', 
   view.rerender(<CurrencyText>$2.5</CurrencyText>)
   expect(screen.queryByRole('img')).not.toBeInTheDocument()
   expect(view.container).toHaveTextContent('$2.5')
+})
+
+test('uses the same image in column labels and translated monetary hints', () => {
+  useSystemConfigStore.getState().setConfig({
+    currency: {
+      ...DEFAULT_CURRENCY_CONFIG,
+      quotaDisplayType: 'CUSTOM',
+      customCurrencySymbol: 'Credits',
+      customCurrencyIcon: '/coin.png',
+    },
+  })
+  const view = render(
+    <>
+      <CurrencyText label>Available Balance (Credits)</CurrencyText>
+      <Trans
+        i18nKey='Leave empty to use the site default (<amount></amount>)'
+        components={{
+          amount: (
+            <span>
+              <CurrencyText>Credits 0.002</CurrencyText>
+            </span>
+          ),
+        }}
+      />
+    </>
+  )
+  expect(screen.getAllByRole('img', { name: 'Credits' })).toHaveLength(2)
+  expect(view.container).toHaveTextContent('0.002')
+  expect(view.container).not.toHaveTextContent('(Credits)')
 })

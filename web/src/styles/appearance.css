@@ -40,6 +40,8 @@ html[data-glass-ui] [data-slot='sidebar-inset'],
 html[data-glass-ui] [data-slot='sidebar-inner'],
 html[data-glass-ui] [data-slot='card'],
 html[data-glass-ui] [data-slot='table-container'],
+html[data-glass-ui] [data-slot='data-table-card'],
+html[data-glass-ui] .bg-card,
 html[data-glass-ui] .glass-surface {
   background-color: color-mix(
     in srgb,
@@ -49,13 +51,51 @@ html[data-glass-ui] .glass-surface {
   backdrop-filter: blur(var(--glass-blur, 20px)) saturate(120%);
 }
 
+html[data-glass-ui] [data-slot='data-table-card'][data-state='selected'] {
+  background-color: color-mix(
+    in srgb,
+    color-mix(in srgb, var(--primary) 7%, var(--background))
+      var(--glass-opacity, 85%),
+    transparent
+  );
+}
+
+html[data-glass-ui] .bg-card .bg-card,
+html[data-glass-ui] .overview-summary .bg-background\/60 {
+  background-color: transparent;
+  backdrop-filter: none;
+}
+
+html[data-glass-ui] .overview-balance {
+  background-image: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--overview-accent-2) 12%, transparent),
+    color-mix(in srgb, var(--overview-accent-1) 7%, transparent)
+  );
+}
+
 html[data-glass-ui] .bg-background,
+html[data-glass-ui] .bg-muted,
 html[data-glass-ui] .bg-sidebar {
   background-color: color-mix(
     in srgb,
     var(--background) var(--glass-opacity, 85%),
     transparent
   );
+}
+
+.newapi-chart-tooltip {
+  border-radius: var(--radius-xl) !important;
+  color: var(--foreground) !important;
+}
+
+html[data-glass-ui] .newapi-chart-tooltip {
+  background: color-mix(
+    in srgb,
+    var(--background) var(--glass-opacity, 85%),
+    transparent
+  ) !important;
+  backdrop-filter: blur(var(--glass-blur, 20px)) saturate(120%);
 }
 
 /* Blur the primary surfaces once; nested backgrounds remain clear so the image
@@ -94,8 +134,7 @@ html[data-glass-ui] [data-slot='popover-content'] {
 /* Frozen cells and headers use their own blur to soften content scrolling
    underneath them, while keeping the global surface opacity. */
 html[data-glass-ui] [data-slot='table-cell'].sticky,
-html[data-glass-ui] [data-slot='table-head'].sticky,
-html[data-glass-ui] [data-slot='table-header'] [data-slot='table-head'] {
+html[data-glass-ui] [data-slot='table-header'] {
   background-color: color-mix(
     in srgb,
     var(--background) var(--glass-opacity, 85%),
@@ -104,13 +143,49 @@ html[data-glass-ui] [data-slot='table-header'] [data-slot='table-head'] {
   backdrop-filter: blur(var(--glass-blur, 20px)) saturate(120%);
 }
 
-html[data-glass-ui] [data-slot='table-header'] {
+html[data-glass-ui] [data-slot='table-header'] [data-slot='table-head'] {
+  background-color: transparent;
   backdrop-filter: none;
 }
 
-html[data-glass-ui] [data-slot='table-header'],
 html[data-glass-ui] [data-slot='table-header'] [data-slot='table-row'] {
   background-color: transparent;
+}
+
+/* Match frozen and scrolling columns, including hover and selection. */
+html[data-glass-ui] [data-slot='table-body'] [data-slot='table-row'] {
+  background-color: transparent;
+}
+
+html[data-glass-ui] [data-slot='table-body'] [data-slot='table-cell'] {
+  background-color: color-mix(
+    in srgb,
+    var(--data-table-card-bg, var(--background)) var(--glass-opacity, 85%),
+    transparent
+  );
+}
+
+html[data-glass-ui]
+  [data-slot='table-body']
+  [data-slot='table-row']:hover
+  [data-slot='table-cell'] {
+  background-color: color-mix(
+    in srgb,
+    var(--muted) var(--glass-opacity, 85%),
+    transparent
+  );
+}
+
+html[data-glass-ui]
+  [data-slot='table-body']
+  [data-state='selected']
+  [data-slot='table-cell'] {
+  background-color: color-mix(
+    in srgb,
+    color-mix(in srgb, var(--primary) 12%, var(--background))
+      var(--glass-opacity, 85%),
+    transparent
+  );
 }
 
 html[data-glass-ui] .availability-table {
@@ -155,6 +230,8 @@ html[data-glass-ui] .availability-table [data-availability-level] {
 @supports not (backdrop-filter: blur(1px)) {
   html[data-glass-ui] [data-slot='sidebar-inset'],
   html[data-glass-ui] [data-slot='card'],
+  html[data-glass-ui] [data-slot='data-table-card'],
+  html[data-glass-ui] .bg-card,
   html[data-glass-ui] [data-slot='table-header'],
   html[data-glass-ui] [data-slot='table-header'] [data-slot='table-head'],
   html[data-glass-ui] [data-slot='table-head'].sticky,

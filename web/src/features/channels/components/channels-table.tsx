@@ -544,19 +544,21 @@ export function ChannelsTable() {
               reorderEnabled={reorderActive}
             />
           )}
-          cardGridClassName='grid grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-3'
+          cardGridClassName='grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2 2xl:grid-cols-3'
           applyHeaderSize
           afterTable={<ChannelPriorityStatus order={priorityOrder} />}
           toolbarProps={{
-            collapsibleOnMobile: true,
+            collapsibleOnMobile: false,
             searchPlaceholder: t('Filter by name, ID, or key...'),
-            searchDebounceMs: 500,
+            searchDebounceMs: 300,
+            hasAdditionalFilters: Boolean(modelFilterInput.trim()),
             onReset: () => {
               resetModelFilterInput()
             },
             additionalSearch: (
               <Input
                 placeholder={t('Filter by model...')}
+                aria-label={t('Filter by model...')}
                 value={modelFilterInput}
                 onChange={onModelFilterInputChange}
                 onCompositionStart={onModelFilterCompositionStart}
@@ -565,12 +567,6 @@ export function ChannelsTable() {
               />
             ),
             filters: [
-              {
-                columnId: 'status',
-                title: t('Status'),
-                options: [...CHANNEL_STATUS_OPTIONS],
-                singleSelect: true,
-              },
               {
                 columnId: 'type',
                 title: t('Type'),
@@ -586,6 +582,36 @@ export function ChannelsTable() {
             ],
             preActions: (
               <>
+                <div
+                  role='group'
+                  aria-label={t('Status')}
+                  className='flex shrink-0 items-center gap-1'
+                >
+                  {CHANNEL_STATUS_OPTIONS.map((option) => (
+                    <Button
+                      key={option.value}
+                      variant={
+                        (statusFilter[0] ?? 'all') === option.value
+                          ? 'secondary'
+                          : 'ghost'
+                      }
+                      size='sm'
+                      aria-pressed={(statusFilter[0] ?? 'all') === option.value}
+                      onClick={() =>
+                        onColumnFiltersChange((previous) => [
+                          ...previous.filter(
+                            (filter) => filter.id !== 'status'
+                          ),
+                          ...(option.value !== 'all'
+                            ? [{ id: 'status', value: [option.value] }]
+                            : []),
+                        ])
+                      }
+                    >
+                      {t(option.label)}
+                    </Button>
+                  ))}
+                </div>
                 <Tooltip>
                   <TooltipTrigger
                     render={

@@ -16,10 +16,11 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { type Table } from '@tanstack/react-table'
+import type { Table } from '@tanstack/react-table'
 import * as React from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { CurrencyText } from '@/components/currency-display'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -74,9 +75,11 @@ export function DataTableViewOptions<TData>({
                 checked={column.getIsVisible()}
                 onCheckedChange={(value) => column.toggleVisibility(!!value)}
               >
-                {typeof column.columnDef.header === 'string'
-                  ? column.columnDef.header
-                  : (column.columnDef.meta?.label ?? column.id)}
+                <CurrencyText label>
+                  {typeof column.columnDef.header === 'string'
+                    ? column.columnDef.header
+                    : (column.columnDef.meta?.label ?? column.id)}
+                </CurrencyText>
               </DropdownMenuCheckboxItem>
             )
           })}
