@@ -80,98 +80,100 @@ export function AvailabilityTable(props: { data: AvailabilityData }) {
   )
 
   return (
-    <StaticDataTable
-      className='availability-table isolate min-h-0 flex-1 overflow-auto rounded-xl border-[0.5px] [--availability-model-width:calc(var(--spacing)*48)] sm:[--availability-model-width:calc(var(--spacing)*60)]'
-      containerProps={{
-        role: 'region',
-        'aria-label': t('Hourly model availability'),
-        tabIndex: 0,
-      }}
-      tableProps={{
-        withContainer: false,
-        'aria-label': t('Hourly model availability'),
-        style: {
-          width: `calc(var(--availability-model-width) + ${hours.length * 24} * var(--spacing))`,
-        },
-      }}
-      tableClassName='table-fixed border-separate border-spacing-0 [&_td]:border-r-[0.5px] [&_td]:border-b-[0.5px] [&_th]:border-r-[0.5px] [&_th]:border-b-[0.5px]'
-    >
-      <TableHeader className='sticky top-0 z-20'>
-        <TableRow className='hover:bg-transparent'>
-          <TableHead
-            scope='col'
-            className='bg-muted sticky left-0 z-30 h-12 w-48 min-w-48 px-4 sm:w-60 sm:min-w-60'
-          >
-            {t('Model')}
-          </TableHead>
-          {hours.map((ts) => (
+    <div className='isolate min-h-0 flex-1 overflow-hidden rounded-xl border-[0.5px]'>
+      <StaticDataTable
+        className='availability-table h-full overflow-auto rounded-none border-0 [--availability-model-width:calc(var(--spacing)*48)] sm:[--availability-model-width:calc(var(--spacing)*60)]'
+        containerProps={{
+          role: 'region',
+          'aria-label': t('Hourly model availability'),
+          tabIndex: 0,
+        }}
+        tableProps={{
+          withContainer: false,
+          'aria-label': t('Hourly model availability'),
+          style: {
+            width: `calc(var(--availability-model-width) + ${hours.length * 24} * var(--spacing))`,
+          },
+        }}
+        tableClassName='table-fixed border-separate border-spacing-0 [&_td]:border-r-[0.5px] [&_td]:border-b-[0.5px] [&_th]:border-r-[0.5px] [&_th]:border-b-[0.5px]'
+      >
+        <TableHeader className='sticky top-0 z-20'>
+          <TableRow className='hover:bg-transparent'>
             <TableHead
-              key={ts}
               scope='col'
-              className='bg-muted h-12 w-24 px-3 text-center'
-              title={
-                ts === hours.at(-1)
-                  ? t('Current hour is still in progress')
-                  : undefined
-              }
+              className='bg-muted sticky left-0 z-30 h-12 w-48 min-w-48 px-4 sm:w-60 sm:min-w-60'
             >
-              {hourFormatter.format(ts * 1000)}
+              {t('Model')}
             </TableHead>
-          ))}
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {rows.map((row) => (
-          <TableRow key={row.name} className='hover:bg-transparent'>
-            <TableHead
-              scope='row'
-              className='bg-background sticky left-0 z-10 h-14 max-w-48 px-4 sm:max-w-60'
-              title={row.name}
-            >
-              <ModelIdentity name={row.name} icon={row.icon || row.name} />
-            </TableHead>
-            {hours.map((ts) => {
-              const point = row.points.get(ts)
-              const hasData = point != null && point.request_count > 0
-              const rate = hasData
-                ? (point.success_count / point.request_count) * 100
-                : Number.NaN
-              const description = hasData
-                ? t('{{successful}} of {{total}} requests succeeded', {
-                    successful: formatNumber(point.success_count, locale),
-                    total: formatNumber(point.request_count, locale),
-                  })
-                : t('No Data')
-              return (
-                <TableCell
-                  key={ts}
-                  data-availability-level={getSuccessRateLevel(rate)}
-                  className={cn(
-                    'h-14 px-3 py-2 text-center',
-                    CELL_TONES[getSuccessRateLevel(rate)]
-                  )}
-                  title={description}
-                  aria-label={`${hourFormatter.format(ts * 1000)}: ${description}`}
-                >
-                  {hasData ? (
-                    <>
-                      <div>{rateFormatter.format(rate / 100)}</div>
-                      <div
-                        data-table-text='secondary'
-                        className='mt-0.5 opacity-80'
-                      >
-                        {formatNumber(point.request_count, locale)}
-                      </div>
-                    </>
-                  ) : (
-                    <span aria-hidden='true'>—</span>
-                  )}
-                </TableCell>
-              )
-            })}
+            {hours.map((ts) => (
+              <TableHead
+                key={ts}
+                scope='col'
+                className='bg-muted h-12 w-24 px-3 text-center'
+                title={
+                  ts === hours.at(-1)
+                    ? t('Current hour is still in progress')
+                    : undefined
+                }
+              >
+                {hourFormatter.format(ts * 1000)}
+              </TableHead>
+            ))}
           </TableRow>
-        ))}
-      </TableBody>
-    </StaticDataTable>
+        </TableHeader>
+        <TableBody>
+          {rows.map((row) => (
+            <TableRow key={row.name} className='hover:bg-transparent'>
+              <TableHead
+                scope='row'
+                className='bg-background sticky left-0 z-10 h-14 max-w-48 px-4 sm:max-w-60'
+                title={row.name}
+              >
+                <ModelIdentity name={row.name} icon={row.icon || row.name} />
+              </TableHead>
+              {hours.map((ts) => {
+                const point = row.points.get(ts)
+                const hasData = point != null && point.request_count > 0
+                const rate = hasData
+                  ? (point.success_count / point.request_count) * 100
+                  : Number.NaN
+                const description = hasData
+                  ? t('{{successful}} of {{total}} requests succeeded', {
+                      successful: formatNumber(point.success_count, locale),
+                      total: formatNumber(point.request_count, locale),
+                    })
+                  : t('No Data')
+                return (
+                  <TableCell
+                    key={ts}
+                    data-availability-level={getSuccessRateLevel(rate)}
+                    className={cn(
+                      'h-14 px-3 py-2 text-center',
+                      CELL_TONES[getSuccessRateLevel(rate)]
+                    )}
+                    title={description}
+                    aria-label={`${hourFormatter.format(ts * 1000)}: ${description}`}
+                  >
+                    {hasData ? (
+                      <>
+                        <div>{rateFormatter.format(rate / 100)}</div>
+                        <div
+                          data-table-text='secondary'
+                          className='mt-0.5 opacity-80'
+                        >
+                          {formatNumber(point.request_count, locale)}
+                        </div>
+                      </>
+                    ) : (
+                      <span aria-hidden='true'>—</span>
+                    )}
+                  </TableCell>
+                )
+              })}
+            </TableRow>
+          ))}
+        </TableBody>
+      </StaticDataTable>
+    </div>
   )
 }
