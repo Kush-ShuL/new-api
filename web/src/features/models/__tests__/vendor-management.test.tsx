@@ -79,6 +79,52 @@ function conflict() {
 }
 
 describe('vendor management', () => {
+  it('uploads a vendor icon and saves its image URL with the vendor metadata', async () => {
+    vi.spyOn(api, 'get').mockResolvedValue({
+      data: { success: true, data: vendor },
+    })
+    const post = vi.spyOn(api, 'post').mockResolvedValue({
+      data: {
+        success: true,
+        data: { url: '/api/appearance/background/vendor.png' },
+      },
+    })
+    const put = vi
+      .spyOn(api, 'put')
+      .mockResolvedValue({ data: { success: true } })
+    renderWithClient(
+      <VendorMutateDialog open currentVendor={vendor} onOpenChange={() => {}} />
+    )
+    const user = userEvent.setup()
+    await user.upload(
+      await screen.findByLabelText('Upload vendor icon', { selector: 'input' }),
+      new File(['icon'], 'vendor.png', { type: 'image/png' })
+    )
+    await waitFor(() =>
+      expect(screen.getByRole('combobox', { name: 'Icon' })).toHaveValue(
+        '/api/appearance/background/vendor.png'
+      )
+    )
+    expect(post).toHaveBeenCalledWith(
+      '/api/vendors/icon',
+      expect.any(FormData),
+      expect.objectContaining({
+        params: expect.objectContaining({
+          upload_id: expect.stringMatching(/^[a-f0-9-]{36}$/),
+        }),
+      })
+    )
+    await user.click(screen.getByRole('button', { name: 'Save metadata' }))
+    await waitFor(() =>
+      expect(put).toHaveBeenCalledWith('/api/vendors/', {
+        id: 3,
+        name: 'Google',
+        description: 'Original',
+        icon: '/api/appearance/background/vendor.png',
+        version: 'vendor-v1',
+      })
+    )
+  })
   it('edits only vendor metadata using the saved version and protects unsaved changes', async () => {
     vi.spyOn(api, 'get').mockResolvedValue({
       data: { success: true, data: vendor },

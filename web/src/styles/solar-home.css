@@ -1,0 +1,379 @@
+/*
+Copyright (C) 2023-2026 QuantumNous
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+For commercial licensing, please contact support@quantumnous.com
+*/
+.solar-home-page {
+  color: var(--foreground);
+  background: var(--background);
+}
+.solar-home-page > footer,
+html[data-glass-ui] .solar-home-page > footer {
+  background-color: var(--background);
+}
+.solar-public-header > div {
+  max-width: 100%;
+  padding: 0;
+}
+.solar-public-header[data-scrolled='true'] > div {
+  max-width: 52rem;
+  padding: 12px 12px 0;
+}
+.solar-public-header > div > nav {
+  background: color-mix(in srgb, var(--background) 60%, transparent);
+  backdrop-filter: blur(24px);
+  border-radius: var(--radius-xl);
+}
+.solar-public-header[data-scrolled='false'] > div > nav {
+  padding-inline: clamp(16px, 3vw, 64px);
+}
+.solar-workspace {
+  width: 100%;
+  padding: 64px clamp(24px, 5vw, 96px) 48px;
+}
+.solar-home-page > footer > div {
+  max-width: none;
+  padding-inline: clamp(24px, 5vw, 96px);
+}
+.solar-workspace-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 28px;
+}
+.solar-workspace-heading h2 {
+  font-size: 24px;
+  font-weight: 550;
+  letter-spacing: -0.02em;
+}
+.solar-api-address {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  font-size: 14px;
+}
+.solar-api-address > span:first-child {
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+}
+.solar-workspace-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  gap: 40px;
+}
+.solar-request {
+  overflow: hidden;
+  min-width: 0;
+  background: var(--muted);
+  border-radius: var(--radius-xl);
+}
+.solar-request-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 16px 20px 8px;
+}
+.solar-request pre {
+  overflow-x: auto;
+  padding: 12px 24px 28px;
+  font-size: 12px;
+  line-height: 2.1;
+  color: var(--foreground);
+}
+.solar-popular {
+  min-width: 0;
+  padding-top: 16px;
+}
+.solar-popular-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 12px;
+  font-size: 14px;
+  font-weight: 500;
+}
+.solar-popular-heading > a {
+  padding: 8px;
+  color: var(--muted-foreground);
+}
+.solar-popular-model {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 56px;
+  padding: 10px 8px;
+  border-radius: 12px;
+  font-size: 14px;
+}
+.solar-popular-model:hover {
+  background: var(--accent);
+}
+.solar-model-share {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.solar-workspace-links {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 28px;
+}
+.solar-workspace-links a {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  font-size: 14px;
+  color: var(--muted-foreground);
+}
+.solar-workspace-links a > svg:last-child {
+  margin-left: auto;
+}
+.solar-workspace a:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+}
+.solar-hero {
+  position: relative;
+  isolation: isolate;
+  height: 100svh;
+  min-height: 640px;
+  overflow: hidden;
+  background: #050b14;
+  color: #f4f7fb;
+}
+.solar-sky,
+.solar-stage,
+.solar-shade {
+  position: absolute;
+  inset: 0;
+}
+.solar-sky {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.45;
+}
+.solar-stage {
+  opacity: 0;
+  transition: opacity 0.6s;
+}
+.solar-stage[data-ready] {
+  opacity: 1;
+}
+.solar-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: grab;
+}
+.solar-canvas:active {
+  cursor: grabbing;
+}
+.solar-shade {
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, #0309156b, transparent 52%),
+    linear-gradient(0deg, #0309158a, transparent 24%);
+}
+.solar-copy {
+  position: absolute;
+  top: 43%;
+  left: clamp(32px, 8vw, 160px);
+  pointer-events: none;
+  max-width: min(70%, 680px);
+  text-shadow: 0 2px 24px #02060c;
+}
+.solar-copy h1 {
+  font-family: var(--font-sans);
+  font-size: 40px;
+  line-height: 1.3;
+  letter-spacing: -0.025em;
+  font-weight: 700;
+  text-wrap: balance;
+}
+.solar-copy p {
+  margin-top: 24px;
+  font-size: 16px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  color: #e2eaf4;
+}
+.solar-actions {
+  position: absolute;
+  right: 40px;
+  bottom: 96px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 240px;
+}
+.solar-actions > a {
+  justify-content: space-between;
+  min-height: 48px;
+  padding: 12px 20px;
+  border-radius: var(--radius-lg);
+  font-size: 14px;
+  font-weight: 500;
+}
+.solar-action-primary {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+.solar-action-primary:hover {
+  background: color-mix(in srgb, var(--primary) 90%, transparent);
+}
+.solar-action-secondary {
+  background: var(--background);
+  color: var(--foreground);
+  border-color: var(--border);
+  backdrop-filter: blur(12px);
+}
+html[data-glass-ui] .solar-hero .solar-action-secondary {
+  background-color: var(--background);
+}
+.solar-action-secondary:hover {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+.solar-view-controls {
+  position: absolute;
+  top: 88px;
+  right: 32px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--background) 92%, transparent);
+  backdrop-filter: blur(16px);
+  border-radius: var(--radius-lg);
+}
+.solar-view-controls > button {
+  min-height: 44px;
+  color: var(--foreground);
+  border-radius: var(--radius-md);
+}
+.solar-view-controls > button:hover {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+.solar-view-controls > button[aria-pressed='true'] {
+  background: var(--accent);
+}
+.solar-caption {
+  position: absolute;
+  bottom: 32px;
+  left: clamp(32px, 8vw, 160px);
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  font-size: 12px;
+  color: #bdcbdc;
+}
+.solar-caption > a {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+}
+.solar-texture-credit {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px 12px;
+  position: absolute;
+  bottom: 20px;
+  right: 40px;
+  font-size: 12px;
+  color: #a6b6ca;
+}
+.solar-hero a:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 4px;
+}
+@media (max-width: 767px) {
+  .solar-workspace {
+    padding: 40px 24px;
+  }
+  .solar-workspace-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .solar-workspace-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
+  }
+  .solar-workspace-links {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px 24px;
+  }
+  .solar-hero {
+    min-height: 760px;
+  }
+  .solar-copy {
+    top: 64%;
+    left: 24px;
+    max-width: calc(100% - 48px);
+  }
+  .solar-copy h1 {
+    font-size: 32px;
+  }
+  .solar-copy p {
+    margin-top: 16px;
+    font-size: 14px;
+  }
+  .solar-actions {
+    left: 24px;
+    right: 24px;
+    bottom: 112px;
+    width: auto;
+    flex-direction: row;
+  }
+  .solar-actions > a {
+    flex: 1;
+    min-width: 0;
+    padding-inline: 14px;
+  }
+  .solar-view-controls {
+    top: 80px;
+    right: 16px;
+  }
+  .solar-caption {
+    left: 24px;
+    bottom: 72px;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .solar-caption > span {
+    display: none;
+  }
+  .solar-texture-credit {
+    max-width: calc(100% - 48px);
+    right: 24px;
+    bottom: 16px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .solar-stage {
+    transition: none;
+  }
+}

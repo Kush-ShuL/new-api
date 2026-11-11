@@ -92,7 +92,7 @@ export function ConfigDrawer() {
             variant='ghost'
             aria-label={t('Open theme settings')}
             aria-describedby='config-drawer-description'
-            className='max-md:hidden'
+            className='shrink-0'
           />
         }
       >

@@ -64,11 +64,13 @@ import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import { ModelPricingPanel } from '@/features/model-pricing/model-pricing-panel'
+import { ROLE } from '@/lib/roles'
 import {
   requireServerSuccess,
   createServerError,
   getServerErrorMessage,
 } from '@/lib/server-error-message'
+import { useAuthStore } from '@/stores/auth-store'
 
 import { createModel, updateModel, getModel, getVendors } from '../../api'
 import { getNameRuleOptions, ENDPOINT_TEMPLATES } from '../../constants'
@@ -82,15 +84,23 @@ import {
 } from '../../lib/model-form'
 import type { Model } from '../../types'
 import { ModelConnections } from '../model-connections'
+import { ModelCustomizationForm } from '../model-customization-form'
 
 export function ModelMutateDrawer(props: {
   open: boolean
   onOpenChange: (open: boolean) => void
   currentRow?: Model | null
-  initialSection?: 'metadata' | 'pricing'
+  initialSection?: 'metadata' | 'pricing' | 'appearance'
 }) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const canCustomize = useAuthStore(
+    (s) => s.auth.user?.role === ROLE.SUPER_ADMIN
+  )
+  const [appearanceDirty, setAppearanceDirty] = useState(false)
+  const [appearanceVisited, setAppearanceVisited] = useState(
+    props.initialSection === 'appearance'
+  )
   const [createdModel, setCreatedModel] = useState<{
     source: Model | null | undefined
     model: Model
@@ -150,6 +160,8 @@ export function ModelMutateDrawer(props: {
     setPricingDirty(false)
     setPendingPricingName(null)
     setCloseConfirm(false)
+    setAppearanceDirty(false)
+    setAppearanceVisited(props.initialSection === 'appearance')
   }, [
     props.open,
     props.initialSection,
@@ -234,7 +246,7 @@ export function ModelMutateDrawer(props: {
   const metadataDirty = form.formState.isDirty
   const close = (open: boolean) => {
     if (!open && isSubmitting) return
-    if (!open && (metadataDirty || pricingDirty)) {
+    if (!open && (metadataDirty || pricingDirty || appearanceDirty)) {
       setCloseConfirm(true)
       return
     }
@@ -262,10 +274,11 @@ export function ModelMutateDrawer(props: {
             onValueChange={(value) => {
               setSection(value)
               if (value === 'pricing') setPricingVisited(true)
+              if (value === 'appearance') setAppearanceVisited(true)
             }}
             className='shrink-0 px-4'
           >
-            <TabsList className='grid w-full grid-cols-3 group-data-horizontal/tabs:h-auto'>
+            <TabsList className='flex w-full group-data-horizontal/tabs:h-auto [&>button]:flex-1'>
               <TabsTrigger
                 value='metadata'
                 className='h-auto min-w-0 whitespace-normal'
@@ -286,6 +299,15 @@ export function ModelMutateDrawer(props: {
               >
                 {t('Channels and groups')}
               </TabsTrigger>
+              {canCustomize && (
+                <TabsTrigger
+                  value='appearance'
+                  disabled={!hasModelName}
+                  className='h-auto min-w-0 whitespace-normal'
+                >
+                  {t('Model customization')}
+                </TabsTrigger>
+              )}
             </TabsList>
           </Tabs>
           {props.open && section === 'metadata' && (
@@ -520,7 +542,7 @@ export function ModelMutateDrawer(props: {
                             </FormControl>
                             <FormDescription>
                               {t(
-                                'Define API endpoints for this model (JSON format)'
+                                'Only the configured API protocols are accepted. Leave empty to infer protocols from channels.'
                               )}
                             </FormDescription>
                             <FormMessage />
@@ -674,6 +696,21 @@ export function ModelMutateDrawer(props: {
           )}
           {props.open && section === 'connections' && savedModel && (
             <ModelConnections model={savedModel} />
+          )}
+          {props.open && canCustomize && appearanceVisited && savedModel && (
+            <div
+              className={
+                section === 'appearance'
+                  ? 'flex min-h-0 flex-1 flex-col'
+                  : 'hidden'
+              }
+            >
+              <ModelCustomizationForm
+                key={savedModel.model_name}
+                modelName={savedModel.model_name}
+                onDirtyChange={setAppearanceDirty}
+              />
+            </div>
           )}
         </SheetContent>
       </Sheet>

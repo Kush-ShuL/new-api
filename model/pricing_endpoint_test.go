@@ -107,7 +107,7 @@ func TestPricingAdvancedCustomUsesConfiguredEndpointTypes(t *testing.T) {
 	}, byModel["gpt-4o"])
 }
 
-func TestPricingModelMetadataEndpointsMergeWithAdvancedCustomInference(t *testing.T) {
+func TestPricingModelMetadataEndpointsReplaceChannelInference(t *testing.T) {
 	resetPricingEndpointTestTables(t)
 
 	insertPricingEndpointChannel(t, 103, constant.ChannelTypeAdvancedCustom, pricingEndpointAdvancedCustomConfig(
@@ -131,9 +131,71 @@ func TestPricingModelMetadataEndpointsMergeWithAdvancedCustomInference(t *testin
 	byModel := pricingEndpointTypesByModel(t)
 
 	assert.Equal(t, []constant.EndpointType{
-		constant.EndpointTypeOpenAIResponse,
 		constant.EndpointTypeOpenAI,
 	}, byModel["gemini-2.5-flash"])
+}
+
+func TestModelEndpointPolicy(t *testing.T) {
+	resetPricingEndpointTestTables(t)
+	insertPricingEndpointChannel(t, 105, constant.ChannelTypeOpenAI, dto.ChannelOtherSettings{})
+	for _, name := range []string{"messages-only", "responses-only", "both", "empty", "array", "family-chat", "family-response", "custom"} {
+		insertPricingEndpointAbility(t, 105, name)
+	}
+	require.NoError(t, DB.Create(&[]Model{
+		{ModelName: "messages-only", Endpoints: `{"anthropic":{"path":"/v1/messages","method":"POST"}}`, Status: 1},
+		{ModelName: "responses-only", Endpoints: `{"openai-response":"/v1/responses"}`, Status: 1},
+		{ModelName: "both", Endpoints: `["anthropic","openai-response"]`, Status: 1},
+		{ModelName: "empty", Endpoints: `{}`, Status: 1},
+		{ModelName: "array", Endpoints: `["openai-response"]`, Status: 1},
+		{ModelName: "family-", NameRule: NameRulePrefix, Endpoints: `["anthropic"]`, Status: 1},
+		{ModelName: "family-response", Endpoints: `["openai-response"]`, Status: 1},
+		{ModelName: "custom", Endpoints: `{"custom":{"path":"/custom/infer","method":"PUT"}}`, Status: 1},
+	}).Error)
+
+	GetPricing()
+	for _, tc := range []struct {
+		model   string
+		method  string
+		path    string
+		allowed bool
+	}{
+		{"messages-only", "POST", "/v1/messages", true},
+		{"messages-only", "POST", "/v1/chat/completions", false},
+		{"messages-only", "POST", "/v1/responses", false},
+		{"messages-only", "GET", "/v1/responses", false},
+		{"responses-only", "POST", "/v1/responses", true},
+		{"responses-only", "GET", "/v1/responses", true},
+		{"responses-only", "POST", "/v1/responses/compact", false},
+		{"responses-only", "POST", "/v1/messages", false},
+		{"responses-only", "POST", "/v1/chat/completions", false},
+		{"responses-only", "POST", "/v1/completions", false},
+		{"responses-only", "POST", "/pg/chat/completions", false},
+		{"responses-only@thinking:on", "POST", "/v1/chat/completions", false},
+		{"responses-only", "POST", "/v1beta/models/responses-only:generateContent", false},
+		{"both", "POST", "/v1/messages", true},
+		{"both", "POST", "/v1/responses", true},
+		{"both", "POST", "/v1/chat/completions", false},
+		{"empty", "POST", "/v1/chat/completions", true},
+		{"empty", "POST", "/v1/messages", true},
+		{"array", "POST", "/v1/responses", true},
+		{"array", "POST", "/v1/chat/completions", false},
+		{"family-chat", "POST", "/v1/messages", true},
+		{"family-chat", "POST", "/v1/responses", false},
+		{"family-response", "POST", "/v1/messages", false},
+		{"family-response", "POST", "/v1/responses", true},
+		{"custom", "PUT", "/custom/infer", true},
+		{"custom", "POST", "/custom/infer", false},
+		{"unconfigured", "POST", "/v1/chat/completions", true},
+	} {
+		t.Run(tc.model+tc.method+tc.path, func(t *testing.T) {
+			assert.Equal(t, tc.allowed, ModelAllowsEndpoint(tc.model, tc.method, tc.path))
+		})
+	}
+
+	require.NoError(t, DB.Model(&Model{}).Where("model_name = ?", "responses-only").Update("endpoints", `["anthropic"]`).Error)
+	RefreshPricing()
+	assert.False(t, ModelAllowsEndpoint("responses-only", "POST", "/v1/responses"))
+	assert.True(t, ModelAllowsEndpoint("responses-only", "POST", "/v1/messages"))
 }
 
 func TestPricingModelMetadataEndpointsCanProvideEndpointWithoutChannelInference(t *testing.T) {

@@ -23,6 +23,7 @@ import (
 	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
@@ -660,6 +661,104 @@ func TestResponsesWSShutdownInterruptsBusyWriter(t *testing.T) {
 	require.NoError(t, latePeer.SetReadDeadline(time.Now().Add(time.Second)))
 	_, _, err := latePeer.ReadMessage()
 	assert.True(t, websocket.IsCloseError(err, websocket.CloseNormalClosure), "want a 1000 close frame, got %v", err)
+}
+
+func TestResponsesWSChangesModelWithoutClosingClient(t *testing.T) {
+	require.NoError(t, i18n.Init())
+	database := setupRelayChannelDB(t)
+	service.InitHttpClient()
+	previousRatios := ratio_setting.ModelRatio2JSONString()
+	previousFreePreConsume := operation_setting.GetQuotaSetting().EnableFreeModelPreConsume
+	previousCountToken := constant.CountToken
+	operation_setting.GetQuotaSetting().EnableFreeModelPreConsume = false
+	constant.CountToken = false
+	require.NoError(t, ratio_setting.UpdateModelRatioByJSONString(`{"ws-model-a":0,"ws-model-b":0}`))
+	t.Cleanup(func() {
+		require.NoError(t, ratio_setting.UpdateModelRatioByJSONString(previousRatios))
+		operation_setting.GetQuotaSetting().EnableFreeModelPreConsume = previousFreePreConsume
+		constant.CountToken = previousCountToken
+	})
+	var handshakes atomic.Int32
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := (&websocket.Upgrader{}).Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		handshakes.Add(1)
+		for {
+			_, body, err := conn.ReadMessage()
+			if err != nil {
+				return
+			}
+			var request struct {
+				Model string `json:"model"`
+			}
+			if common.Unmarshal(body, &request) != nil {
+				return
+			}
+			// A request rejection keeps the socket open without creating a
+			// billable response. Its message proves the model reached upstream.
+			payload, _ := common.Marshal(map[string]any{"type": "error", "status": 400, "error": map[string]string{"type": "invalid_request_error", "message": request.Model}})
+			if conn.WriteMessage(websocket.TextMessage, payload) != nil {
+				return
+			}
+		}
+	}))
+	defer upstream.Close()
+	channels := make(map[string]int)
+	for _, name := range []string{"ws-model-a", "ws-model-b"} {
+		channel := &model.Channel{Name: name, Key: "sk-test", BaseURL: &upstream.URL, Status: common.ChannelStatusEnabled, Type: constant.ChannelTypeOpenAI}
+		channel.SetSetting(dto.ChannelSettings{ResponsesWebSocketEnabled: true})
+		require.NoError(t, database.Create(channel).Error)
+		channels[name] = channel.Id
+	}
+	client, server, cleanup := newTestWebSocketPair(t)
+	defer cleanup()
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest(http.MethodGet, "/v1/responses", nil)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		ResponsesWebSocketHelper(c, server, func(request *http.Request, _ string, next func(*gin.Context) *types.NewAPIError) *types.NewAPIError {
+			ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+			ctx.Request = request
+			var event struct {
+				Model string `json:"model"`
+			}
+			if err := common.DecodeJson(request.Body, &event); err != nil {
+				return newResponsesWSInvalidRequestError(err)
+			}
+			common.SetContextKey(ctx, constant.ContextKeyUsingGroup, "default")
+			common.SetContextKey(ctx, constant.ContextKeyTokenModelLimitEnabled, true)
+			common.SetContextKey(ctx, constant.ContextKeyTokenModelLimit, map[string]bool{"ws-model-a": true, "ws-model-b": true})
+			service.GetChannelConstraints(ctx).AddPin(appdto.ChannelPin{ChannelId: channels[event.Model], Source: appdto.PinSourceToken, Rank: appdto.PinRankToken, RetryMode: appdto.PinRetrySingleAttempt})
+			return next(ctx)
+		})
+	}()
+	for _, name := range []string{"ws-model-a", "ws-model-b", "ws-model-b", "ws-model-a"} {
+		require.NoError(t, client.WriteMessage(websocket.TextMessage, []byte(`{"type":"response.create","model":"`+name+`","input":"hi"}`)))
+		require.NoError(t, client.SetReadDeadline(time.Now().Add(5*time.Second)))
+		_, body, err := client.ReadMessage()
+		require.NoError(t, err)
+		var event responsesWSErrorEvent
+		require.NoError(t, common.Unmarshal(body, &event))
+		require.NotNil(t, event.Error)
+		assert.Equal(t, name, event.Error.Message)
+	}
+	assert.EqualValues(t, 3, handshakes.Load(), "same model reuses upstream; model changes redial")
+	require.NoError(t, client.WriteMessage(websocket.TextMessage, []byte(`{"type":"response.create","model":"forbidden-model","input":"hi"}`)))
+	_, body, err := client.ReadMessage()
+	require.NoError(t, err)
+	var denied responsesWSErrorEvent
+	require.NoError(t, common.Unmarshal(body, &denied))
+	assert.Equal(t, http.StatusForbidden, denied.Status)
+	assert.EqualValues(t, 3, handshakes.Load(), "model switching cannot bypass token model limits")
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("session did not close after authorization failure")
+	}
 }
 
 func TestResponsesWSPassthroughPreservesRawPricingParameters(t *testing.T) {

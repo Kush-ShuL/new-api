@@ -64,9 +64,10 @@ type responsesWSErrorEvent struct {
 }
 
 type responsesWSMessage struct {
-	kind int
-	body []byte
-	err  error
+	target *websocket.Conn
+	kind   int
+	body   []byte
+	err    error
 }
 
 // responsesWSControl is a client control event (response.cancel) whose
@@ -262,17 +263,23 @@ func (s *responsesWSSession) runCall(c *gin.Context, state *responsesWSCallState
 	if modelName == "" {
 		return newResponsesWSInvalidRequestError(errors.New("model is required"))
 	}
-	if s.lockedModel != "" && modelName != s.lockedModel {
-		return newResponsesWSInvalidRequestError(fmt.Errorf("responses websocket connection is locked to model %q", s.lockedModel))
-	}
 	if apiErr = checkResponsesWSModelAccess(c, modelName); apiErr != nil {
 		return apiErr
+	}
+	if !appmodel.ModelAllowsEndpoint(modelName, http.MethodPost, "/v1/responses") {
+		return types.WithOpenAIError(types.OpenAIError{
+			Message: i18n.T(c, i18n.MsgDistributorModelEndpointDisabled),
+			Type:    "invalid_request_error",
+			Code:    "model_endpoint_disabled",
+		}, http.StatusForbidden, types.ErrOptionWithSkipRetry())
 	}
 	common.SetContextKey(c, appconstant.ContextKeyOriginalModel, modelName)
 	common.SetContextKey(c, appconstant.ContextKeyRequestStartTime, time.Now())
 	service.GetChannelConstraints(c).AddFilter(appdto.ChannelFilter{Kind: appdto.FilterRequestPath, RequestPath: c.Request.URL.Path})
 
-	if s.lockedChannelID != 0 {
+	// Model changes get a fresh channel selection and upstream handshake. This
+	// also respects model-specific deployment URLs, routes, keys and pricing.
+	if s.lockedChannelID != 0 && modelName == s.lockedModel {
 		if apiErr = s.restoreConnectionContext(c, modelName); apiErr != nil {
 			return apiErr
 		}
@@ -387,6 +394,9 @@ func (s *responsesWSSession) runCall(c *gin.Context, state *responsesWSCallState
 	for {
 		select {
 		case incoming := <-state.inbox:
+			if incoming.target != s.getTarget() {
+				continue
+			}
 			idle.Reset(timeout)
 			if incoming.err != nil {
 				info.StreamStatus.SetEndReason(relaycommon.StreamEndReasonScannerErr, incoming.err)
@@ -639,7 +649,10 @@ func (s *responsesWSSession) startTargetReader(target *websocket.Conn) {
 	s.workers.Go(func() {
 		for {
 			kind, body, err := target.ReadMessage()
-			incoming := responsesWSMessage{kind: kind, body: body, err: err}
+			if target != s.getTarget() {
+				return
+			}
+			incoming := responsesWSMessage{target: target, kind: kind, body: body, err: err}
 			if state := s.getCurrent(); state != nil {
 				select {
 				case state.inbox <- incoming:
@@ -651,6 +664,9 @@ func (s *responsesWSSession) startTargetReader(target *websocket.Conn) {
 				case <-s.ctx.Done():
 					return
 				}
+			}
+			if target != s.getTarget() {
+				return
 			}
 			// No request owns this message. An idle upstream that closed
 			// normally ends the client session with the same code.
@@ -694,13 +710,23 @@ func (s *responsesWSSession) getTarget() *websocket.Conn {
 
 func (s *responsesWSSession) setTarget(target *websocket.Conn) bool {
 	s.connectionMu.Lock()
-	defer s.connectionMu.Unlock()
 	if s.ctx.Err() != nil {
+		s.connectionMu.Unlock()
 		_ = target.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""), time.Now().Add(time.Second))
 		_ = target.Close()
 		return false
 	}
+	previous, unregister := s.target, s.unregister
 	s.target = target
+	s.unregister = nil
+	s.connectionMu.Unlock()
+	if unregister != nil {
+		unregister()
+	}
+	if previous != nil {
+		_ = previous.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, "model changed"), time.Now().Add(time.Second))
+		_ = previous.Close()
+	}
 	return true
 }
 
@@ -761,7 +787,12 @@ func (s *responsesWSSession) shutdown(code int, reason string) {
 }
 
 func (s *responsesWSSession) registerChannelClose(channelID int) {
-	unregister := wsmanager.Register(channelID, wsmanager.KindResponses, s.closeForPolicy)
+	target := s.getTarget()
+	unregister := wsmanager.Register(channelID, wsmanager.KindResponses, func(reason string) {
+		if target == s.getTarget() {
+			s.closeForPolicy(reason)
+		}
+	})
 	s.connectionMu.Lock()
 	if s.ctx.Err() != nil {
 		s.connectionMu.Unlock()

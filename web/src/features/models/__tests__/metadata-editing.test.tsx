@@ -33,6 +33,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { pricingOptions } from '@/features/model-pricing/pricing'
 import { api } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth-store'
+import { useSystemConfigStore } from '@/stores/system-config-store'
 
 import { DataTableRowActions } from '../components/data-table-row-actions'
 import { ModelMutateDrawer } from '../components/drawers/model-mutate-drawer'
@@ -57,6 +58,7 @@ const model = {
 afterEach(() => {
   cleanup()
   useAuthStore.getState().auth.reset()
+  useSystemConfigStore.getState().setConfig({ modelCustomizations: {} })
 })
 
 function renderModelActions(currentModel: Model = model, role = 100) {
@@ -76,6 +78,72 @@ function renderModelActions(currentModel: Model = model, role = 100) {
 }
 
 describe('model pricing entry', () => {
+  it('edits custom model appearance from the model list without changing other models or metadata', async () => {
+    useAuthStore.getState().auth.setUser({ id: 1, username: 'root', role: 100 })
+    const other = {
+      display_name: 'Keep this',
+      icon: 'Claude.Color',
+    }
+    useSystemConfigStore
+      .getState()
+      .setConfig({ modelCustomizations: { 'other-model': other } })
+    vi.spyOn(api, 'get').mockImplementation(async (url) => ({
+      data: {
+        success: true,
+        data: url === '/api/models/7' ? model : { items: [] },
+      },
+    }))
+    const put = vi
+      .spyOn(api, 'put')
+      .mockResolvedValue({ data: { success: true } })
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+    render(
+      <QueryClientProvider client={client}>
+        <ModelsProvider>
+          <ModelMutateDrawer open currentRow={model} onOpenChange={() => {}} />
+        </ModelsProvider>
+      </QueryClientProvider>
+    )
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('tab', { name: 'Model customization' }))
+    expect(
+      screen.getByRole('tab', { name: 'Model customization' })
+    ).toHaveAttribute('aria-selected', 'true')
+    await user.type(await screen.findByLabelText('Display name'), 'My GPT')
+    await user.type(
+      screen.getByLabelText('Model card background'),
+      'https://example.com/model.webp'
+    )
+    const input = screen.getByLabelText('Upload model icon', {
+      selector: 'input',
+    })
+    await user.upload(
+      input,
+      new File(['icon'], 'model.png', { type: 'image/png' })
+    )
+    await waitFor(() =>
+      expect(screen.getAllByRole('button', { name: 'Clear' })).toHaveLength(2)
+    )
+    await user.click(screen.getByRole('button', { name: 'Save Changes' }))
+    await waitFor(() =>
+      expect(put).toHaveBeenCalledWith(
+        '/api/option/',
+        expect.objectContaining({ key: 'ModelCustomizations' })
+      )
+    )
+    const request = put.mock.calls[0][1] as { value: string }
+    const payload = JSON.parse(request.value)
+    expect(payload['other-model']).toEqual(other)
+    expect(payload['example-model']).toMatchObject({
+      display_name: 'My GPT',
+      background: 'https://example.com/model.webp',
+      icon: expect.stringContaining('data:image/png;base64,'),
+    })
+    expect(put.mock.calls).toHaveLength(1)
+    client.clear()
+  })
   it('saves pricing and opens connections for a channel model without creating metadata', async () => {
     const channelModel = { ...model, id: 0, model_name: 'channel-only' }
     let storedPrice = 1.5

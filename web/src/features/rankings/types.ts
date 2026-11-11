@@ -83,6 +83,7 @@ export type RankingMover = {
  * Flat shape ready to feed VChart's stacked-bar spec.
  */
 export type ModelHistoryPoint = {
+  requests?: number
   ts: string
   /** Pre-formatted x-axis label (e.g. "May 5", "12:00"). */
   label: string
@@ -94,6 +95,9 @@ export type ModelHistoryPoint = {
 }
 
 export type ModelHistorySeries = {
+  window_start?: number
+  window_end?: number
+  bucket_seconds?: number
   /** Flat points ready for VChart, ordered oldest → newest. */
   points: ModelHistoryPoint[]
   /** Models that appear in the series, sorted by total tokens desc. */
@@ -124,6 +128,8 @@ export type VendorShareSeries = {
 }
 
 export type RankingsSnapshot = {
+  total_tokens?: number
+  total_models?: number
   // Overall (all categories) ------------------------------------------------
   models: ModelRanking[]
   vendors: VendorRanking[]

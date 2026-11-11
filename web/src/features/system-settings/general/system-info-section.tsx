@@ -17,10 +17,12 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { zodResolver } from '@hookform/resolvers/zod'
+import { useState } from 'react'
 import type { Resolver } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import * as z from 'zod'
 
+import { ImageUpload } from '@/components/image-upload'
 import {
   Form,
   FormControl,
@@ -32,6 +34,7 @@ import {
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import { uploadBackground } from '@/lib/upload-background'
 
 import { FormDirtyIndicator } from '../components/form-dirty-indicator'
 import { FormNavigationGuard } from '../components/form-navigation-guard'
@@ -46,11 +49,24 @@ import { useSettingsForm } from '../hooks/use-settings-form'
 import { useUpdateOption } from '../hooks/use-update-option'
 import { isValidTaskPublicAddress } from './task-public-address'
 
+const logoSchema = z
+  .string()
+  .url()
+  .or(
+    z
+      .string()
+      .regex(
+        /^\/api\/appearance\/background\/[a-f0-9]{64}\.(png|jpg|webp|gif)$/
+      )
+  )
+  .optional()
+  .or(z.literal(''))
+
 const _systemInfoSchema = z.object({
   SystemName: z.string().min(1),
   ServerAddress: z.string().optional(),
   TaskPublicAddress: z.string().refine(isValidTaskPublicAddress),
-  Logo: z.string().url().optional().or(z.literal('')),
+  Logo: logoSchema,
   Footer: z.string().optional(),
   About: z.string().optional(),
   HomePageContent: z.string().optional(),
@@ -77,6 +93,7 @@ function normalizeValue(value: unknown): string {
 export function SystemInfoSection({ defaultValues }: SystemInfoSectionProps) {
   const { t } = useTranslation()
   const updateOption = useUpdateOption()
+  const [isLogoUploading, setIsLogoUploading] = useState(false)
 
   const normalizedDefaults: SystemInfoFormValues = {
     SystemName: normalizeValue(defaultValues.SystemName),
@@ -106,7 +123,7 @@ export function SystemInfoSection({ defaultValues }: SystemInfoSectionProps) {
           'Enter an absolute HTTP(S) URL without credentials, query parameters, or fragments'
         ),
     }),
-    Logo: z.string().url().optional().or(z.literal('')),
+    Logo: logoSchema,
     Footer: z.string().optional(),
     About: z.string().optional(),
     HomePageContent: z.string().optional(),
@@ -147,12 +164,17 @@ export function SystemInfoSection({ defaultValues }: SystemInfoSectionProps) {
 
       <SettingsSection title={t('System Information')}>
         <Form {...form}>
-          <SettingsForm onSubmit={handleSubmit}>
+          <SettingsForm
+            onSubmit={
+              isLogoUploading ? (event) => event.preventDefault() : handleSubmit
+            }
+          >
             <SettingsPageFormActions
               onSave={handleSubmit}
               onReset={handleReset}
               isSaving={isSubmitting || updateOption.isPending}
-              isResetDisabled={!isDirty}
+              isSaveDisabled={isLogoUploading}
+              isResetDisabled={!isDirty || isLogoUploading}
             />
             <FormDirtyIndicator isDirty={isDirty} />
             <SettingsFormGrid>
@@ -219,15 +241,25 @@ export function SystemInfoSection({ defaultValues }: SystemInfoSectionProps) {
                 name='Logo'
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>{t('Logo URL')}</FormLabel>
+                    <FormLabel>{t('Logo')}</FormLabel>
                     <FormControl>
                       <Input
                         placeholder={t('https://example.com/logo.png')}
+                        disabled={isLogoUploading || isSubmitting}
                         {...field}
                       />
                     </FormControl>
+                    <ImageUpload
+                      value={field.value ?? ''}
+                      onChange={field.onChange}
+                      label={t('Upload file')}
+                      maxBytes={100 * 1024 * 1024}
+                      onUpload={uploadBackground}
+                      onUploadingChange={setIsLogoUploading}
+                      disabled={isSubmitting || updateOption.isPending}
+                    />
                     <FormDescription>
-                      {t('URL to your logo image (optional)')}
+                      {t('Upload an image up to 100 MB, or use an image URL.')}
                     </FormDescription>
                     <FormMessage />
                   </FormItem>

@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useTranslation } from 'react-i18next'
 
+import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
 import type { RankingPeriod } from '../types'
@@ -63,10 +64,11 @@ export function RankingsHero(props: RankingsHeroProps) {
         {PERIODS.map((p) => {
           const isActive = props.period === p.id
           return (
-            <button
+            <Button
               key={p.id}
               role='tab'
               type='button'
+              variant='ghost'
               aria-selected={isActive}
               onClick={() => props.onPeriodChange(p.id)}
               className={cn(
@@ -84,7 +86,7 @@ export function RankingsHero(props: RankingsHeroProps) {
                   isActive ? 'opacity-100' : 'opacity-0'
                 )}
               />
-            </button>
+            </Button>
           )
         })}
       </div>

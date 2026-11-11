@@ -136,6 +136,23 @@ export function getLobeIcon(
   const fallback = renderLobeIconFallback(trimmedName, size)
   if (!trimmedName) return fallback
 
+  if (
+    /^(https?:\/\/|\/(?!\/)|data:image\/(png|jpeg|webp|gif);base64,)/i.test(
+      trimmedName
+    )
+  ) {
+    return (
+      <img
+        src={trimmedName}
+        alt=''
+        aria-hidden='true'
+        width={size}
+        height={size}
+        className='object-contain'
+      />
+    )
+  }
+
   const segments = trimmedName.split('.')
   const baseKey = segments[0]
   const CustomIcon = CUSTOM_ICONS[baseKey]

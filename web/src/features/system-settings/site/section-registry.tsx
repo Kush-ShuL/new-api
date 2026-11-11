@@ -28,8 +28,16 @@ import { NoticeSection } from '../maintenance/notice-section'
 import { SidebarModulesSection } from '../maintenance/sidebar-modules-section'
 import type { SiteSettings } from '../types'
 import { createSectionRegistry } from '../utils/section-registry'
+import { AppearanceSection } from './appearance-section'
 
 const SITE_SECTIONS = [
+  {
+    id: 'appearance',
+    titleKey: 'Appearance & Background',
+    build: (settings: SiteSettings) => (
+      <AppearanceSection defaultValue={settings.AppearanceSettings} />
+    ),
+  },
   {
     id: 'system-info',
     titleKey: 'System Information',

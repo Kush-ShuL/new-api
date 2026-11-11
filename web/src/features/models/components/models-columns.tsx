@@ -22,6 +22,7 @@ import { useTranslation } from 'react-i18next'
 
 import { CopyButton } from '@/components/copy-button'
 import { BadgeListCell, TruncatedCell } from '@/components/data-table'
+import { ModelIdentity } from '@/components/model-identity'
 import { StatusBadge } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -37,7 +38,6 @@ import {
 import { modelPricingDisplay } from '@/features/model-pricing/pricing'
 import { ModelPriceCell } from '@/features/pricing/components/model-price-cell'
 import { formatTimestampToDate } from '@/lib/format'
-import { getLobeIcon } from '@/lib/lobe-icon'
 
 import { getNameRuleConfig } from '../constants'
 import { parseModelTags, formatEndpointsDisplay } from '../lib'
@@ -106,9 +106,6 @@ export function useModelsColumns(
           const iconKey = model.icon || vendor?.icon || model.model_name[0]
           return (
             <div className='flex max-w-[320px] min-w-0 items-start gap-2.5 py-1'>
-              <span className='mt-1 flex size-6 shrink-0 items-center justify-center'>
-                {getLobeIcon(iconKey, 24)}
-              </span>
               <div className='min-w-0 flex-1'>
                 <div className='flex min-w-0 items-center gap-1'>
                   <Button
@@ -120,7 +117,11 @@ export function useModelsColumns(
                       setOpen('update-model')
                     }}
                   >
-                    <span className='truncate'>{model.model_name}</span>
+                    <ModelIdentity
+                      name={model.model_name}
+                      icon={iconKey}
+                      showId
+                    />
                   </Button>
                   <CopyButton
                     value={model.model_name}

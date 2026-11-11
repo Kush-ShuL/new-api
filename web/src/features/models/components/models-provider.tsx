@@ -35,6 +35,7 @@ type DialogType =
   | 'create-model'
   | 'update-model'
   | 'price-model'
+  | 'customize-model'
   | 'create-vendor'
   | 'vendors'
   | 'price-sync'

@@ -21,11 +21,15 @@ import { memo, useMemo, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { CopyButton } from '@/components/copy-button'
+import { ModelIdentity } from '@/components/model-identity'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
+import { useModelCustomizations } from '@/hooks/use-model-customizations'
 import { getLobeIcon } from '@/lib/lobe-icon'
 import { cn } from '@/lib/utils'
 import { useSystemConfigStore } from '@/stores/system-config-store'
+
+import '@/styles/model-artwork.css'
 
 import { DEFAULT_TOKEN_UNIT } from '../constants'
 import { useBillingTime } from '../hooks/use-billing-time'
@@ -66,7 +70,9 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
   const tags = parseTags(props.model.tags)
   const groups = props.model.enable_groups || []
   const endpoints = props.model.supported_endpoint_types || []
-  const modelIconKey = props.model.icon || props.model.vendor_icon
+  const custom = useModelCustomizations()[props.model.model_name]
+  const modelIconKey =
+    custom?.icon || props.model.icon || props.model.vendor_icon
   const modelIcon = modelIconKey ? getLobeIcon(modelIconKey, 28) : null
   const initial = props.model.model_name?.charAt(0).toUpperCase() || '?'
   const isUnconfiguredTaskUsage = isUnconfiguredTaskUsageModel(props.model)
@@ -267,7 +273,24 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
   }
 
   return (
-    <Card className='hover:ring-foreground/20 h-full min-w-0 gap-3 transition-colors'>
+    <Card
+      className={cn(
+        'hover:ring-foreground/20 relative isolate h-full min-w-0 gap-3 overflow-hidden transition-colors',
+        custom?.background && 'model-card-with-background'
+      )}
+    >
+      {custom?.background && (
+        <div className='model-card-media' aria-hidden='true'>
+          <img
+            src={custom.background}
+            alt=''
+            aria-hidden='true'
+            loading='lazy'
+            className='model-card-background'
+          />
+          <div className='model-card-mask' aria-hidden='true' />
+        </div>
+      )}
       <CardHeader className='flex flex-row items-start gap-3'>
         <div
           aria-hidden
@@ -284,7 +307,7 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
             className='line-clamp-2 font-mono text-[15px] leading-snug font-semibold [overflow-wrap:anywhere]'
             title={props.model.model_name}
           >
-            {props.model.model_name}
+            <ModelIdentity name={props.model.model_name} showIcon={false} />
           </h3>
           {props.model.vendor_name && (
             <p

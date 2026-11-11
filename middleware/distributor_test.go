@@ -14,11 +14,49 @@ import (
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/pkg/jsplugin"
 	"github.com/QuantumNous/new-api/relaykit/dto"
+	"github.com/QuantumNous/new-api/setting/model_customization"
 	"github.com/QuantumNous/new-api/setting/model_setting"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestLegacyCompletionModelRestriction(t *testing.T) {
+	common.OptionMapRWMutex.Lock()
+	previous, existed := common.OptionMap[model_customization.OptionKey]
+	if common.OptionMap == nil {
+		common.OptionMap = map[string]string{}
+	}
+	common.OptionMap[model_customization.OptionKey] = `{"restricted-model":{"disable_legacy_completions":true,"display_name":"My Model"}}`
+	common.OptionMapRWMutex.Unlock()
+	t.Cleanup(func() {
+		common.OptionMapRWMutex.Lock()
+		if existed {
+			common.OptionMap[model_customization.OptionKey] = previous
+		} else {
+			delete(common.OptionMap, model_customization.OptionKey)
+		}
+		common.OptionMapRWMutex.Unlock()
+	})
+	for _, path := range []string{"/v1/completions", "/v1/chat/completions", "/pg/chat/completions"} {
+		t.Run(path, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			c, engine := gin.CreateTestContext(w)
+			_ = c
+			engine.POST(path, Distribute(), func(c *gin.Context) { c.Status(http.StatusNoContent) })
+			request := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{"model":"restricted-model"}`))
+			request.Header.Set("Content-Type", "application/json")
+			engine.ServeHTTP(w, request)
+			assert.Equal(t, http.StatusForbidden, w.Code)
+			assert.Contains(t, w.Body.String(), "model_endpoint_disabled")
+		})
+	}
+	for _, path := range []string{"/v1/responses", "/v1/responses/compact", "/v1/messages", "/v1/models"} {
+		assert.False(t, model_customization.LegacyCompletionsDisabled("restricted-model", path))
+	}
+	assert.False(t, model_customization.LegacyCompletionsDisabled("restricted-model-preview", "/v1/chat/completions"))
+	assert.False(t, model_customization.LegacyCompletionsDisabled("another-model", "/v1/chat/completions"))
+}
 
 func TestChannelMatchesExpectedTaskPluginUsesGenericChannelSetting(t *testing.T) {
 	channel := &model.Channel{Type: constant.ChannelTypeTaskPlugin}

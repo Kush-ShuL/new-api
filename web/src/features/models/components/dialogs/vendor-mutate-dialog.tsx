@@ -55,6 +55,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import { formatTimestampToDate } from '@/lib/format'
 import { createServerError } from '@/lib/server-error-message'
+import { uploadBackground } from '@/lib/upload-background'
 
 import { createVendor, getVendor, updateVendor } from '../../api'
 import { vendorsQueryKeys } from '../../lib'
@@ -76,6 +77,7 @@ export function VendorMutateDialog(props: {
   const id = props.currentVendor?.id
   const [section, setSection] = useState('details')
   const [confirmClose, setConfirmClose] = useState(false)
+  const [iconUploading, setIconUploading] = useState(false)
   const loadedKey = useRef('')
   const pendingNavigation = useRef<(() => void) | null>(null)
   const form = useForm({
@@ -132,7 +134,7 @@ export function VendorMutateDialog(props: {
   })
   const isDirty = form.formState.isDirty
   const close = (open: boolean) => {
-    if (open || save.isPending) return false
+    if (open || save.isPending || iconUploading) return false
     if (isDirty) {
       setConfirmClose(true)
       return false
@@ -221,6 +223,12 @@ export function VendorMutateDialog(props: {
                               <LobeIconField
                                 value={field.value ?? ''}
                                 onChange={field.onChange}
+                                imageUpload={{
+                                  label: t('Upload vendor icon'),
+                                  onUpload: (file) =>
+                                    uploadBackground(file, '/api/vendors/icon'),
+                                  onUploadingChange: setIconUploading,
+                                }}
                               />
                             </FormControl>
                             <FormMessage />
@@ -274,7 +282,7 @@ export function VendorMutateDialog(props: {
               <SheetFooter className={sideDrawerFooterClassName()}>
                 <Button
                   variant='outline'
-                  disabled={save.isPending}
+                  disabled={save.isPending || iconUploading}
                   onClick={() => close(false)}
                 >
                   {t('Close')}
@@ -284,6 +292,7 @@ export function VendorMutateDialog(props: {
                   form='vendor-mutate-form'
                   disabled={
                     save.isPending ||
+                    iconUploading ||
                     Boolean(id && (query.isPending || query.isError))
                   }
                 >

@@ -51,6 +51,10 @@ func Distribute() func(c *gin.Context) {
 			return
 		}
 		_, pinned, _ := constraints.ResolvedPin()
+		if !model.ModelAllowsEndpoint(modelRequest.Model, c.Request.Method, c.Request.URL.Path) {
+			abortWithOpenAiMessage(c, http.StatusForbidden, i18n.T(c, i18n.MsgDistributorModelEndpointDisabled), "model_endpoint_disabled")
+			return
+		}
 		if !pinned {
 			// Select a channel for the user
 			// check token model mapping

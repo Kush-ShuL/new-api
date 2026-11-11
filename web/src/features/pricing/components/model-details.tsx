@@ -38,6 +38,7 @@ import { StaticDataTable } from '@/components/data-table'
 import { sideDrawerContentClassName } from '@/components/drawer-layout'
 import { GroupBadge } from '@/components/group-badge'
 import { PublicLayout } from '@/components/layout'
+import { ModelIdentity } from '@/components/model-identity'
 import { Button } from '@/components/ui/button'
 import {
   Sheet,
@@ -56,10 +57,12 @@ import {
   getSuccessRateTextClass,
 } from '@/features/performance-metrics/lib/format'
 import { PluginIcon } from '@/features/task-plugins/components/plugin-icon'
-import { getLobeIcon } from '@/lib/lobe-icon'
+import { useModelCustomizations } from '@/hooks/use-model-customizations'
 import { requireServerSuccess } from '@/lib/server-error-message'
 import { cn } from '@/lib/utils'
 import { useSystemConfigStore } from '@/stores/system-config-store'
+
+import '@/styles/model-artwork.css'
 
 import { DEFAULT_TOKEN_UNIT } from '../constants'
 import { useBillingTime } from '../hooks/use-billing-time'
@@ -597,16 +600,18 @@ function ModelBackendDetailsSection(props: { model: PricingModel }) {
 function ModelHeader(props: { model: PricingModel }) {
   const { t } = useTranslation()
   const model = props.model
-  const modelIconKey = model.icon || model.vendor_icon
-  const modelIcon = modelIconKey ? getLobeIcon(modelIconKey, 20) : null
+  const custom = useModelCustomizations()[model.model_name]
   const description = model.description || model.vendor_description || null
 
   return (
     <header className='pb-4'>
       <div className='flex items-center gap-2.5'>
-        {modelIcon}
-        <h1 className='font-mono text-xl font-bold tracking-tight sm:text-2xl'>
-          {model.model_name}
+        <h1 className='text-xl font-bold tracking-tight'>
+          <ModelIdentity
+            name={model.model_name}
+            icon={model.icon || model.vendor_icon}
+            showId
+          />
         </h1>
         <CopyButton
           value={model.model_name || ''}
@@ -624,6 +629,13 @@ function ModelHeader(props: { model: PricingModel }) {
         <span className='text-muted-foreground/30'>·</span>
         <ModelBillingModeBadge model={model} />
       </div>
+      {custom?.background && (
+        <img
+          src={custom.background}
+          alt={t('Model card background')}
+          className='model-details-artwork'
+        />
+      )}
       {description && (
         <p className='text-muted-foreground mt-2 text-sm leading-relaxed'>
           {description}

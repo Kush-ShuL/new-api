@@ -1,0 +1,56 @@
+/*
+Copyright (C) 2023-2026 QuantumNous
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+For commercial licensing, please contact support@quantumnous.com
+*/
+.model-card-background,
+.model-card-mask {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.model-card-media {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+.model-card-background {
+  object-fit: cover;
+}
+.model-card-mask {
+  background: linear-gradient(180deg, #050b14a8, #050b14e3 85%);
+}
+.model-card-with-background {
+  --foreground: #f4f7fa;
+  --muted-foreground: #d4dce6;
+  color: var(--foreground);
+}
+.model-details-artwork {
+  width: 100%;
+  aspect-ratio: 21 / 9;
+  max-height: 400px;
+  margin-top: 20px;
+  object-fit: cover;
+  border-radius: var(--radius-xl);
+}
+@media (max-width: 639px) {
+  .model-details-artwork {
+    aspect-ratio: 16 / 9;
+  }
+}

@@ -30,6 +30,12 @@ vi.mock('@lobehub/icons/es/Mistral/components/Color.js', () => {
 })
 
 describe('Lobe icons', () => {
+  it('renders an uploaded bitmap icon with the requested dimensions', () => {
+    const source = 'data:image/png;base64,iVBORw0KGgo='
+    const view = render(getLobeIcon(source, 28))
+    expect(view.container.querySelector('img')).toHaveAttribute('src', source)
+    expect(view.container.querySelector('img')).toHaveAttribute('width', '28')
+  })
   it.each([
     '/build/web/node_modules/@lobehub/icons/es/',
     'D:\\a\\new-api\\web\\node_modules\\@lobehub\\icons\\es\\',

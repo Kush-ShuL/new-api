@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
+import type { Appearance } from '@/lib/appearance'
 import { DEFAULT_SYSTEM_NAME, DEFAULT_LOGO } from '@/lib/constants'
 
 export type CurrencyDisplayType = 'USD' | 'CNY' | 'TOKENS' | 'CUSTOM'
@@ -39,6 +40,15 @@ export interface CurrencyConfig {
 }
 
 export interface SystemConfig {
+  appearance?: Appearance
+  modelCustomizations?: Record<
+    string,
+    {
+      display_name: string
+      icon: string
+      background?: string
+    }
+  >
   systemName: string
   logo: string
   footerHtml?: string

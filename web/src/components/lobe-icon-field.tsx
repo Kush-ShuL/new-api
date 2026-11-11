@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { ImageUpload } from '@/components/image-upload'
 import { Button } from '@/components/ui/button'
 import { Combobox } from '@/components/ui/combobox'
 import { getLobeIcon, getLobeIconNames } from '@/lib/lobe-icon'
@@ -30,6 +31,11 @@ export function LobeIconField(props: {
   allowInheritance?: boolean
   inheritedIcon?: string
   inheritedName?: string
+  imageUpload?: {
+    label: string
+    onUpload: (file: File) => Promise<string>
+    onUploadingChange?: (uploading: boolean) => void
+  }
 }) {
   const { t } = useTranslation()
   const [custom, setCustom] = useState(false)
@@ -79,11 +85,15 @@ export function LobeIconField(props: {
             value={props.value}
             onValueChange={(value) => props.onChange(value ?? '')}
             allowCustomValue
-            searchPlaceholder={t('Search icons or enter an icon key')}
+            searchPlaceholder={
+              props.imageUpload
+                ? t('Search icons or enter an image URL')
+                : t('Search icons or enter an icon key')
+            }
             emptyText={t('No matching icons')}
             className='min-w-0 flex-1'
           />
-          {props.value && (
+          {props.value && !props.imageUpload && (
             <Button
               type='button'
               variant='ghost'
@@ -94,6 +104,17 @@ export function LobeIconField(props: {
             </Button>
           )}
         </div>
+      )}
+      {props.imageUpload && (
+        <ImageUpload
+          value={props.value}
+          preview={getLobeIcon(props.value, 28)}
+          onChange={props.onChange}
+          label={props.imageUpload.label}
+          maxBytes={100 * 1024 * 1024}
+          onUpload={props.imageUpload.onUpload}
+          onUploadingChange={props.imageUpload.onUploadingChange}
+        />
       )}
       <div className='bg-muted/40 flex items-center gap-3 rounded-lg border p-3'>
         <span className='flex size-9 shrink-0 items-center justify-center'>
@@ -115,7 +136,11 @@ export function LobeIconField(props: {
       </div>
       {usesCustom && (
         <p className='text-muted-foreground text-xs'>
-          {t('Select a suggested icon or keep an existing advanced icon key.')}
+          {props.imageUpload
+            ? t('Choose an icon, paste an image URL, or upload a picture.')
+            : t(
+                'Select a suggested icon or keep an existing advanced icon key.'
+              )}
         </p>
       )}
     </div>

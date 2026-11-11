@@ -266,12 +266,27 @@ func TestPerformanceAggregationAndFlush(t *testing.T) {
 			assert.NotContains(t, string(encoded), "request_count")
 			assert.NotContains(t, string(encoded), "success_count")
 
+			availability, err := QueryAvailability(24, groups)
+			require.NoError(t, err)
+			require.Len(t, availability.Models, 1)
+			assert.Equal(t, start, availability.WindowStart)
+			assert.Equal(t, AvailabilityModel{
+				ModelName: "test-model", RequestCount: 101,
+				Series: []AvailabilityPoint{{Ts: hour, RequestCount: 101, SuccessCount: 100}},
+			}, availability.Models[0])
+			deniedAvailability, err := QueryAvailability(24, []string{})
+			require.NoError(t, err)
+			assert.Empty(t, deniedAvailability.Models)
+
 			flushCompletedBuckets()
 			flushCompletedBuckets()
 			after, err := Query(QueryParams{Model: "test-model", Hours: 24, AllowedGroups: groups})
 			require.NoError(t, err)
 			assert.Equal(t, before.Summary, after.Summary)
 			assert.Equal(t, before.Series, after.Series)
+			persistedAvailability, err := QueryAvailability(24, groups)
+			require.NoError(t, err)
+			assert.Equal(t, availability.Models, persistedAvailability.Models)
 
 			RecordRelayResult(context.Background(), &relaycommon.RelayInfo{OriginModelName: "test-model", UsingGroup: "a", StartTime: now}, types.InitOpenAIError("context_length_exceeded", 400))
 			after, err = Query(QueryParams{Model: "test-model", Hours: 24, AllowedGroups: groups})
@@ -350,6 +365,33 @@ func TestPerformanceAggregationAndFlush(t *testing.T) {
 				require.NoError(t, err)
 				assert.Equal(t, points, persisted.RecentSuccessSeries["history-model"])
 				assert.Equal(t, history.RecentSuccessSeries["history-hot"], persisted.RecentSuccessSeries["history-hot"])
+			})
+
+			t.Run("availability merges minute buckets and preserves zero successes and the current hour", func(t *testing.T) {
+				currentHour := now.Unix() - now.Unix()%3600
+				for _, row := range []model.PerfMetric{
+					{ModelName: "availability-model", Group: "a", BucketTs: hour + 60, RequestCount: 100, SuccessCount: 100},
+					{ModelName: "availability-model", Group: "b", BucketTs: hour + 120, RequestCount: 1},
+					{ModelName: "availability-failed", Group: "a", BucketTs: currentHour, RequestCount: 3},
+					{ModelName: "availability-old", Group: "a", BucketTs: currentHour - 48*3600, RequestCount: 2, SuccessCount: 2},
+				} {
+					require.NoError(t, model.UpsertPerfMetric(&row))
+				}
+				current := &atomicBucket{}
+				current.add(Sample{Success: true})
+				hotBuckets.Store(bucketKey{model: "availability-model", group: "a", bucketTs: currentHour}, current)
+				availability, err := QueryAvailability(24, groups)
+				require.NoError(t, err)
+				models := lo.KeyBy(availability.Models, func(m AvailabilityModel) string { return m.ModelName })
+				assert.Equal(t, []AvailabilityPoint{
+					{Ts: hour, RequestCount: 101, SuccessCount: 100},
+					{Ts: currentHour, RequestCount: 1, SuccessCount: 1},
+				}, models["availability-model"].Series)
+				assert.Equal(t, []AvailabilityPoint{{Ts: currentHour, RequestCount: 3}}, models["availability-failed"].Series)
+				assert.NotContains(t, models, "availability-old")
+				week, err := QueryAvailability(168, groups)
+				require.NoError(t, err)
+				assert.Contains(t, lo.KeyBy(week.Models, func(m AvailabilityModel) string { return m.ModelName }), "availability-old")
 			})
 
 			t.Run("recent history stops at the 7 day boundary even with fewer than 24 samples", func(t *testing.T) {

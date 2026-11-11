@@ -34,6 +34,9 @@ export function ModelsDialogs() {
     descriptionData,
     setDescriptionData,
   } = useModels()
+  let initialSection: 'metadata' | 'pricing' | 'appearance' = 'metadata'
+  if (open === 'price-model') initialSection = 'pricing'
+  if (open === 'customize-model') initialSection = 'appearance'
 
   return (
     <>
@@ -46,9 +49,10 @@ export function ModelsDialogs() {
         open={
           open === 'create-model' ||
           open === 'update-model' ||
-          open === 'price-model'
+          open === 'price-model' ||
+          open === 'customize-model'
         }
-        initialSection={open === 'price-model' ? 'pricing' : 'metadata'}
+        initialSection={initialSection}
         onOpenChange={(v) => !v && setOpen(null)}
         currentRow={currentRow}
       />

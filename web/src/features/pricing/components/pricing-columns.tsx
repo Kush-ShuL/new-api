@@ -25,6 +25,7 @@ import {
   DataTableColumnHeader,
 } from '@/components/data-table'
 import { GroupBadge } from '@/components/group-badge'
+import { ModelIdentity } from '@/components/model-identity'
 import { StatusBadge } from '@/components/status-badge'
 import { getLobeIcon } from '@/lib/lobe-icon'
 
@@ -55,15 +56,14 @@ export function usePricingColumns(
       ),
       cell: ({ row }) => {
         const model = row.original
-        const modelIconKey = model.icon || model.vendor_icon
-        const modelIcon = modelIconKey ? getLobeIcon(modelIconKey, 14) : null
-
         return (
           <div className='flex max-w-full min-w-0 items-center gap-2'>
-            {modelIcon}
-            <span className='truncate font-mono text-sm font-medium'>
-              {model.model_name}
-            </span>
+            <ModelIdentity
+              name={model.model_name}
+              icon={model.icon || model.vendor_icon}
+              size={20}
+              showId
+            />
           </div>
         )
       },

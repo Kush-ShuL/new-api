@@ -1,6 +1,7 @@
 package model
 
 import (
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -72,6 +73,8 @@ var (
 
 var (
 	modelSupportEndpointTypes = make(map[string][]constant.EndpointType)
+	modelEndpointPolicies     = make(map[string]*Model)
+	modelEndpointMetadata     []Model
 	modelSupportEndpointsLock = sync.RWMutex{}
 )
 
@@ -182,13 +185,6 @@ func loadPricingAdvancedCustomConfigs(enableAbilities []AbilityWithChannel) map[
 	return configs
 }
 
-func appendPricingEndpoint(endpoints []string, endpoint string) []string {
-	if endpoint == "" || common.StringsContains(endpoints, endpoint) {
-		return endpoints
-	}
-	return append(endpoints, endpoint)
-}
-
 func updatePricing() {
 	//modelRatios := common.GetModelRatios()
 	enableAbilities, err := GetAllEnableAbilityWithChannels()
@@ -254,24 +250,17 @@ func updatePricing() {
 		modelSupportEndpointsStr[ability.Model] = endpoints
 	}
 
-	// 再补充模型自定义端点：若配置有效则追加到已有推断，不再裁剪渠道真实能力
+	// Explicit metadata endpoints define the accepted protocols. Channel
+	// inference is used only when no endpoints have been configured.
+	modelEndpointPolicies = metaMap
+	modelEndpointMetadata = allMeta
 	for modelName, meta := range metaMap {
-		if strings.TrimSpace(meta.Endpoints) == "" {
+		endpoints, err := declaredEndpointNames(meta.Endpoints)
+		if err != nil || len(endpoints) == 0 {
 			continue
 		}
-		var raw map[string]any
-		if err := common.Unmarshal([]byte(meta.Endpoints), &raw); err == nil {
-			endpoints := modelSupportEndpointsStr[modelName]
-			for k, v := range raw {
-				switch v.(type) {
-				case string, map[string]any:
-					endpoints = appendPricingEndpoint(endpoints, k)
-				}
-			}
-			if len(endpoints) > 0 {
-				modelSupportEndpointsStr[modelName] = endpoints
-			}
-		}
+		slices.Sort(endpoints)
+		modelSupportEndpointsStr[modelName] = slices.Compact(endpoints)
 	}
 
 	modelSupportEndpointTypes = make(map[string][]constant.EndpointType)

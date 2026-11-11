@@ -12,16 +12,16 @@ import (
 )
 
 const (
-	rankingCacheTTL         = 5 * time.Minute
-	rankingLeaderboardLimit = 20
-	rankingHistoryLimit     = 10
-	rankingVendorLimit      = 5
-	rankingMoverLimit       = 6
-	rankingOthersLabel      = "Others"
-	rankingUnknownVendor    = "Unknown"
+	rankingCacheTTL      = 5 * time.Minute
+	rankingVendorLimit   = 5
+	rankingMoverLimit    = 6
+	rankingOthersLabel   = "Others"
+	rankingUnknownVendor = "Unknown"
 )
 
 type RankingsResponse struct {
+	TotalTokens        int64              `json:"total_tokens"`
+	TotalModels        int                `json:"total_models"`
 	Models             []RankedModel      `json:"models"`
 	Vendors            []RankedVendor     `json:"vendors"`
 	TopMovers          []RankingMover     `json:"top_movers"`
@@ -63,11 +63,12 @@ type RankingMover struct {
 }
 
 type ModelHistoryPoint struct {
-	Ts     string `json:"ts"`
-	Label  string `json:"label"`
-	Model  string `json:"model"`
-	Vendor string `json:"vendor"`
-	Tokens int64  `json:"tokens"`
+	Ts       string `json:"ts"`
+	Label    string `json:"label"`
+	Model    string `json:"model"`
+	Vendor   string `json:"vendor"`
+	Tokens   int64  `json:"tokens"`
+	Requests int64  `json:"requests"`
 }
 
 type ModelHistoryModel struct {
@@ -77,9 +78,12 @@ type ModelHistoryModel struct {
 }
 
 type ModelHistorySeries struct {
-	Points  []ModelHistoryPoint `json:"points"`
-	Models  []ModelHistoryModel `json:"models"`
-	Buckets int                 `json:"buckets"`
+	WindowStart   int64               `json:"window_start"`
+	WindowEnd     int64               `json:"window_end"`
+	BucketSeconds int64               `json:"bucket_seconds"`
+	Points        []ModelHistoryPoint `json:"points"`
+	Models        []ModelHistoryModel `json:"models"`
+	Buckets       int                 `json:"buckets"`
 }
 
 type VendorSharePoint struct {
@@ -207,11 +211,14 @@ func buildRankingsSnapshot(config rankingPeriodConfig, now time.Time) (*Rankings
 	rankedModels := buildRankedModels(currentTotals, totalTokens, previousRankByModel, previousTokensByModel, meta, config.hasPrevious)
 	vendors := buildRankedVendors(currentTotals, previousTotals, totalTokens, meta, config.hasPrevious)
 	modelHistory := buildModelHistory(currentBuckets, currentTotals, meta, config)
+	modelHistory.WindowStart, modelHistory.WindowEnd, modelHistory.BucketSeconds = startTime, endTime, config.bucketSize
 	vendorHistory := buildVendorShareHistory(currentBuckets, vendors, totalTokens, meta, config)
 	movers, droppers := buildRankingMovers(rankedModels)
 
 	return &RankingsResponse{
-		Models:             limitRankedModels(rankedModels, rankingLeaderboardLimit),
+		TotalTokens:        totalTokens,
+		TotalModels:        len(currentTotals),
+		Models:             rankedModels,
 		Vendors:            vendors,
 		TopMovers:          movers,
 		TopDroppers:        droppers,
@@ -359,59 +366,21 @@ func ensureVendorAggregate(aggregates map[string]*vendorAggregate, meta rankingM
 }
 
 func buildModelHistory(buckets []model.RankingQuotaBucket, totals []model.RankingQuotaTotal, meta map[string]rankingModelMeta, config rankingPeriodConfig) ModelHistorySeries {
-	topModels := make(map[string]struct{})
-	models := make([]ModelHistoryModel, 0, minInt(len(totals), rankingHistoryLimit)+1)
-	otherTotal := int64(0)
-	for idx, item := range totals {
-		if idx < rankingHistoryLimit {
-			topModels[item.ModelName] = struct{}{}
-			modelMeta := modelMeta(item.ModelName, meta)
-			models = append(models, ModelHistoryModel{Name: item.ModelName, Vendor: modelMeta.vendor, Total: item.TotalTokens})
-			continue
-		}
-		otherTotal += item.TotalTokens
+	models := make([]ModelHistoryModel, 0, len(totals))
+	for _, item := range totals {
+		models = append(models, ModelHistoryModel{Name: item.ModelName, Vendor: modelMeta(item.ModelName, meta).vendor, Total: item.TotalTokens})
 	}
-	if otherTotal > 0 {
-		models = append(models, ModelHistoryModel{Name: rankingOthersLabel, Vendor: "Various", Total: otherTotal})
-	}
-
+	points := make([]ModelHistoryPoint, 0, len(buckets))
 	bucketSet := make(map[int64]struct{})
-	tokensByBucketAndModel := make(map[int64]map[string]int64)
 	for _, item := range buckets {
-		modelName := item.ModelName
-		if _, ok := topModels[modelName]; !ok {
-			modelName = rankingOthersLabel
-		}
 		bucketSet[item.Bucket] = struct{}{}
-		if _, ok := tokensByBucketAndModel[item.Bucket]; !ok {
-			tokensByBucketAndModel[item.Bucket] = make(map[string]int64)
-		}
-		tokensByBucketAndModel[item.Bucket][modelName] += item.Tokens
+		points = append(points, ModelHistoryPoint{
+			Ts: rankingBucketTs(item.Bucket), Label: rankingBucketLabel(item.Bucket, config),
+			Model: item.ModelName, Vendor: modelMeta(item.ModelName, meta).vendor,
+			Tokens: item.Tokens, Requests: item.Requests,
+		})
 	}
-
-	sortedBuckets := sortedRankingBuckets(bucketSet)
-	points := make([]ModelHistoryPoint, 0, len(sortedBuckets)*len(models))
-	for _, bucket := range sortedBuckets {
-		for _, historyModel := range models {
-			tokens := tokensByBucketAndModel[bucket][historyModel.Name]
-			if tokens <= 0 {
-				continue
-			}
-			points = append(points, ModelHistoryPoint{
-				Ts:     rankingBucketTs(bucket),
-				Label:  rankingBucketLabel(bucket, config),
-				Model:  historyModel.Name,
-				Vendor: historyModel.Vendor,
-				Tokens: tokens,
-			})
-		}
-	}
-
-	return ModelHistorySeries{
-		Points:  points,
-		Models:  models,
-		Buckets: len(sortedBuckets),
-	}
+	return ModelHistorySeries{Points: points, Models: models, Buckets: len(bucketSet)}
 }
 
 func buildVendorShareHistory(buckets []model.RankingQuotaBucket, vendors []RankedVendor, totalTokens int64, meta map[string]rankingModelMeta, config rankingPeriodConfig) VendorShareSeries {
@@ -572,13 +541,6 @@ func rankingGrowthPct(current int64, previous int64) float64 {
 
 func roundRankingFloat(value float64) float64 {
 	return math.Round(value*10000) / 10000
-}
-
-func limitRankedModels(rows []RankedModel, limit int) []RankedModel {
-	if limit <= 0 || len(rows) <= limit {
-		return rows
-	}
-	return rows[:limit]
 }
 
 func limitRankingMovers(rows []RankingMover, limit int) []RankingMover {
