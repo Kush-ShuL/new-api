@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useMemo } from 'react'
+import { useLayoutEffect, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { StaticDataTable } from '@/components/data-table'
@@ -49,6 +49,37 @@ const CELL_TONES: Record<SuccessRateLevel, string> = {
 
 export function AvailabilityTable(props: { data: AvailabilityData }) {
   const { t, i18n } = useTranslation()
+  const viewportRef = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
+    const viewport = viewportRef.current
+    if (!viewport || !viewport.parentElement) return
+    const frame = viewport.parentElement
+    const measure = () => {
+      const width = viewport.clientWidth
+      const height = viewport.clientHeight
+      const scrollbarWidth = viewport.offsetWidth - width
+      const scrollbarHeight = viewport.offsetHeight - height
+      const borderWidth = getComputedStyle(frame).borderLeftWidth
+      viewport.style.setProperty('--availability-viewport-width', `${width}px`)
+      viewport.style.setProperty(
+        '--availability-viewport-height',
+        `${height}px`
+      )
+      viewport.style.setProperty(
+        '--availability-scrollbar-width',
+        `${scrollbarWidth}px`
+      )
+      viewport.style.setProperty(
+        '--availability-scrollbar-height',
+        `${scrollbarHeight}px`
+      )
+      viewport.style.setProperty('--availability-border-width', borderWidth)
+    }
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(viewport)
+    return () => observer.disconnect()
+  }, [])
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
   const hourFormatter = new Intl.DateTimeFormat(locale, {
     month: '2-digit',
@@ -81,99 +112,119 @@ export function AvailabilityTable(props: { data: AvailabilityData }) {
 
   return (
     <div className='isolate min-h-0 flex-1 overflow-hidden rounded-xl border-[0.5px]'>
-      <StaticDataTable
-        className='availability-table h-full overflow-auto rounded-none border-0 [--availability-model-width:calc(var(--spacing)*48)] sm:[--availability-model-width:calc(var(--spacing)*60)]'
-        containerProps={{
-          role: 'region',
-          'aria-label': t('Hourly model availability'),
-          tabIndex: 0,
-        }}
-        tableProps={{
-          withContainer: false,
-          'aria-label': t('Hourly model availability'),
-          style: {
-            width: `calc(var(--availability-model-width) + ${hours.length * 24} * var(--spacing))`,
-          },
-        }}
-        tableClassName='table-fixed border-separate border-spacing-0 [&_td]:border-r-[0.5px] [&_td]:border-b-[0.5px] [&_th]:border-r-[0.5px] [&_th]:border-b-[0.5px]'
+      <div
+        ref={viewportRef}
+        className='availability-table h-full overflow-auto [--availability-model-width:calc(var(--spacing)*48)] sm:[--availability-model-width:calc(var(--spacing)*60)]'
+        role='region'
+        aria-label={t('Hourly model availability')}
+        tabIndex={0}
       >
-        <TableHeader className='sticky top-0 z-20'>
-          <TableRow className='hover:bg-transparent'>
-            <TableHead
-              scope='col'
-              className='bg-muted sticky left-0 z-30 h-12 w-48 min-w-48 px-4 sm:w-60 sm:min-w-60'
-            >
-              {t('Model')}
-            </TableHead>
-            {hours.map((ts) => (
-              <TableHead
-                key={ts}
-                scope='col'
-                className='bg-muted h-12 w-24 px-3 text-center'
-                title={
-                  ts === hours.at(-1)
-                    ? t('Current hour is still in progress')
-                    : undefined
-                }
-              >
-                {hourFormatter.format(ts * 1000)}
-              </TableHead>
-            ))}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rows.map((row) => (
-            <TableRow key={row.name} className='hover:bg-transparent'>
-              <TableHead
-                scope='row'
-                className='bg-background sticky left-0 z-10 h-14 max-w-48 px-4 sm:max-w-60'
-                title={row.name}
-              >
-                <ModelIdentity name={row.name} icon={row.icon || row.name} />
-              </TableHead>
-              {hours.map((ts) => {
-                const point = row.points.get(ts)
-                const hasData = point != null && point.request_count > 0
-                const rate = hasData
-                  ? (point.success_count / point.request_count) * 100
-                  : Number.NaN
-                const description = hasData
-                  ? t('{{successful}} of {{total}} requests succeeded', {
-                      successful: formatNumber(point.success_count, locale),
-                      total: formatNumber(point.request_count, locale),
-                    })
-                  : t('No Data')
-                return (
-                  <TableCell
+        <div className='relative min-h-full w-max min-w-full'>
+          <div
+            aria-hidden='true'
+            className='availability-glass availability-header-glass'
+          />
+          <div
+            aria-hidden='true'
+            className='availability-glass availability-column-glass'
+          />
+          <div
+            aria-hidden='true'
+            className='availability-glass availability-corner-glass'
+          />
+          <StaticDataTable
+            className='overflow-visible rounded-none border-0'
+            tableProps={{
+              withContainer: false,
+              'aria-label': t('Hourly model availability'),
+              style: {
+                width: `calc(var(--availability-model-width) + ${hours.length * 24} * var(--spacing))`,
+              },
+            }}
+            tableClassName='table-fixed border-separate border-spacing-0 [&_td]:border-r-[0.5px] [&_td]:border-b-[0.5px] [&_th]:border-r-[0.5px] [&_th]:border-b-[0.5px]'
+          >
+            <TableHeader>
+              <TableRow className='hover:bg-transparent'>
+                <TableHead
+                  scope='col'
+                  className='sticky top-0 left-0 z-50 h-12 w-48 min-w-48 px-4 sm:w-60 sm:min-w-60'
+                >
+                  {t('Model')}
+                </TableHead>
+                {hours.map((ts) => (
+                  <TableHead
                     key={ts}
-                    data-availability-level={getSuccessRateLevel(rate)}
-                    className={cn(
-                      'h-14 px-3 py-2 text-center',
-                      CELL_TONES[getSuccessRateLevel(rate)]
-                    )}
-                    title={description}
-                    aria-label={`${hourFormatter.format(ts * 1000)}: ${description}`}
+                    scope='col'
+                    className='sticky top-0 z-40 h-12 w-24 px-3 text-center'
+                    title={
+                      ts === hours.at(-1)
+                        ? t('Current hour is still in progress')
+                        : undefined
+                    }
                   >
-                    {hasData ? (
-                      <>
-                        <div>{rateFormatter.format(rate / 100)}</div>
-                        <div
-                          data-table-text='secondary'
-                          className='mt-0.5 opacity-80'
-                        >
-                          {formatNumber(point.request_count, locale)}
-                        </div>
-                      </>
-                    ) : (
-                      <span aria-hidden='true'>—</span>
-                    )}
-                  </TableCell>
-                )
-              })}
-            </TableRow>
-          ))}
-        </TableBody>
-      </StaticDataTable>
+                    {hourFormatter.format(ts * 1000)}
+                  </TableHead>
+                ))}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map((row) => (
+                <TableRow key={row.name} className='hover:bg-transparent'>
+                  <TableHead
+                    scope='row'
+                    className='sticky left-0 z-20 h-14 max-w-48 px-4 sm:max-w-60'
+                    title={row.name}
+                  >
+                    <ModelIdentity
+                      name={row.name}
+                      icon={row.icon || row.name}
+                    />
+                  </TableHead>
+                  {hours.map((ts) => {
+                    const point = row.points.get(ts)
+                    const hasData = point != null && point.request_count > 0
+                    const rate = hasData
+                      ? (point.success_count / point.request_count) * 100
+                      : Number.NaN
+                    const description = hasData
+                      ? t('{{successful}} of {{total}} requests succeeded', {
+                          successful: formatNumber(point.success_count, locale),
+                          total: formatNumber(point.request_count, locale),
+                        })
+                      : t('No Data')
+                    return (
+                      <TableCell
+                        key={ts}
+                        data-availability-level={getSuccessRateLevel(rate)}
+                        className={cn(
+                          'h-14 px-3 py-2 text-center',
+                          CELL_TONES[getSuccessRateLevel(rate)]
+                        )}
+                        title={description}
+                        aria-label={`${hourFormatter.format(ts * 1000)}: ${description}`}
+                      >
+                        {hasData ? (
+                          <>
+                            <div>{rateFormatter.format(rate / 100)}</div>
+                            <div
+                              data-table-text='secondary'
+                              className='mt-0.5 opacity-80'
+                            >
+                              {formatNumber(point.request_count, locale)}
+                            </div>
+                          </>
+                        ) : (
+                          <span aria-hidden='true'>—</span>
+                        )}
+                      </TableCell>
+                    )
+                  })}
+                </TableRow>
+              ))}
+            </TableBody>
+          </StaticDataTable>
+        </div>
+      </div>
     </div>
   )
 }
