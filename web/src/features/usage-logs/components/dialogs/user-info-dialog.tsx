@@ -35,12 +35,20 @@ interface UserInfoDialogProps {
   onOpenChange: (open: boolean) => void
 }
 
-function InfoItem({ label, value }: { label: string; value: string | number }) {
+function InfoItem({
+  label,
+  value,
+  currency = false,
+}: {
+  label: string
+  value: string | number
+  currency?: boolean
+}) {
   return (
     <div className='space-y-1.5'>
       <Label className='text-muted-foreground text-xs'>{label}</Label>
       <div className='text-sm font-semibold'>
-        <CurrencyText>{value}</CurrencyText>
+        {currency ? <CurrencyText>{value}</CurrencyText> : value}
       </div>
     </div>
   )
@@ -115,10 +123,12 @@ export function UserInfoDialog({
             <InfoItem
               label={t('Balance')}
               value={formatQuota(userInfo.quota)}
+              currency
             />
             <InfoItem
               label={t('Used Quota')}
               value={formatQuota(userInfo.used_quota)}
+              currency
             />
           </div>
 
@@ -157,6 +167,7 @@ export function UserInfoDialog({
                 <InfoItem
                   label={t('Invitation Quota')}
                   value={formatQuota(userInfo.aff_quota)}
+                  currency
                 />
               )}
             </>

@@ -52,6 +52,7 @@ import {
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
+import { CurrencyText } from '@/components/currency-display'
 import { Dialog } from '@/components/dialog'
 import { StatusBadge, type StatusBadgeProps } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
@@ -364,7 +365,12 @@ function BillingBreakdown(props: {
   return (
     <DetailSection label={t('Billing Details')}>
       {rows.map((row) => (
-        <DetailRow key={row.label} label={row.label} value={row.value} mono />
+        <DetailRow
+          key={row.label}
+          label={row.label}
+          value={<CurrencyText>{row.value}</CurrencyText>}
+          mono
+        />
       ))}
       {usageFacts.length > 0 && (
         <>
@@ -383,7 +389,7 @@ function BillingBreakdown(props: {
       )}
       <DetailRow
         label={t('Total Cost')}
-        value={formatLogQuota(log.quota)}
+        value={<CurrencyText>{formatLogQuota(log.quota)}</CurrencyText>}
         mono
       />
     </DetailSection>
@@ -916,7 +922,11 @@ export function DetailsDialog(props: DetailsDialogProps) {
             )}
             <DetailRow
               label={t('Fee Amount')}
-              value={formatLogQuota(other.fee_quota ?? props.log.quota)}
+              value={
+                <CurrencyText>
+                  {formatLogQuota(other.fee_quota ?? props.log.quota)}
+                </CurrencyText>
+              }
               mono
             />
           </DetailSection>
@@ -1324,7 +1334,11 @@ export function DetailsDialog(props: DetailsDialogProps) {
             {other.subscription_pre_consumed != null && (
               <DetailRow
                 label={t('Pre-consumed')}
-                value={formatLogQuota(other.subscription_pre_consumed)}
+                value={
+                  <CurrencyText>
+                    {formatLogQuota(other.subscription_pre_consumed)}
+                  </CurrencyText>
+                }
                 mono
               />
             )}
@@ -1332,21 +1346,31 @@ export function DetailsDialog(props: DetailsDialogProps) {
               other.subscription_post_delta !== 0 && (
                 <DetailRow
                   label={t('Post Delta')}
-                  value={formatLogQuota(other.subscription_post_delta)}
+                  value={
+                    <CurrencyText>
+                      {formatLogQuota(other.subscription_post_delta)}
+                    </CurrencyText>
+                  }
                   mono
                 />
               )}
             {other.subscription_consumed != null && (
               <DetailRow
                 label={t('Final Consumed')}
-                value={formatLogQuota(other.subscription_consumed)}
+                value={
+                  <CurrencyText>
+                    {formatLogQuota(other.subscription_consumed)}
+                  </CurrencyText>
+                }
                 mono
               />
             )}
             {other.subscription_remain != null && (
               <DetailRow
                 label={t('Remaining')}
-                value={`${formatLogQuota(other.subscription_remain)}${other.subscription_total != null ? ` / ${formatLogQuota(other.subscription_total)}` : ''}`}
+                value={
+                  <CurrencyText>{`${formatLogQuota(other.subscription_remain)}${other.subscription_total != null ? ` / ${formatLogQuota(other.subscription_total)}` : ''}`}</CurrencyText>
+                }
                 mono
               />
             )}
