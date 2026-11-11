@@ -17,10 +17,12 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { zodResolver } from '@hookform/resolvers/zod'
+import { useState } from 'react'
 import type { Resolver } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import * as z from 'zod'
 
+import { ImageUpload } from '@/components/image-upload'
 import {
   Form,
   FormControl,
@@ -40,6 +42,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
+import { uploadBackground } from '@/lib/upload-background'
 import { DEFAULT_CURRENCY_CONFIG } from '@/stores/system-config-store'
 
 import { FormDirtyIndicator } from '../components/form-dirty-indicator'
@@ -67,6 +70,7 @@ const createPricingSchema = (t: (key: string) => string) =>
       general_setting: z.object({
         quota_display_type: z.enum(['USD', 'CNY', 'TOKENS', 'CUSTOM']),
         custom_currency_symbol: z.string().max(8).optional(),
+        custom_currency_icon: z.string().max(4096).optional(),
         custom_currency_exchange_rate: z.coerce
           .number()
           .min(0.0001, t('Exchange rate must be greater than 0'))
@@ -104,6 +108,7 @@ type PricingSectionProps = {
 export function PricingSection({ defaultValues }: PricingSectionProps) {
   const { t } = useTranslation()
   const updateOption = useUpdateOption()
+  const [isIconUploading, setIsIconUploading] = useState(false)
 
   const pricingSchema = createPricingSchema(t)
 
@@ -150,12 +155,17 @@ export function PricingSection({ defaultValues }: PricingSectionProps) {
 
       <SettingsSection title={t('Pricing & Display')}>
         <Form {...form}>
-          <SettingsForm onSubmit={handleSubmit}>
+          <SettingsForm
+            onSubmit={
+              isIconUploading ? (event) => event.preventDefault() : handleSubmit
+            }
+          >
             <SettingsPageFormActions
               onSave={handleSubmit}
               onReset={handleReset}
               isSaving={updateOption.isPending || isSubmitting}
-              isResetDisabled={!isDirty}
+              isSaveDisabled={isIconUploading}
+              isResetDisabled={!isDirty || isIconUploading}
             />
             <FormDirtyIndicator isDirty={isDirty} />
             {showQuotaPerUnit && (
@@ -238,9 +248,7 @@ export function PricingSection({ defaultValues }: PricingSectionProps) {
                     <FormLabel>
                       {displayType === 'CNY'
                         ? t('CNY per USD')
-                        : displayType === 'USD'
-                          ? t('USD Exchange Rate')
-                          : t('USD Exchange Rate')}
+                        : t('USD Exchange Rate')}
                     </FormLabel>
                     <FormControl>
                       <Input
@@ -262,6 +270,25 @@ export function PricingSection({ defaultValues }: PricingSectionProps) {
 
             {displayType === 'CUSTOM' && (
               <div className='grid gap-4 sm:grid-cols-2'>
+                <FormField
+                  control={form.control}
+                  name='general_setting.custom_currency_icon'
+                  render={({ field }) => (
+                    <FormItem className='sm:col-span-2'>
+                      <FormLabel>{t('Custom Currency Icon')}</FormLabel>
+                      <ImageUpload
+                        value={field.value ?? ''}
+                        onChange={field.onChange}
+                        label={t('Upload file')}
+                        maxBytes={100 * 1024 * 1024}
+                        onUpload={uploadBackground}
+                        onUploadingChange={setIsIconUploading}
+                        disabled={isSubmitting || updateOption.isPending}
+                      />
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
                 <FormField
                   control={form.control}
                   name='general_setting.custom_currency_symbol'

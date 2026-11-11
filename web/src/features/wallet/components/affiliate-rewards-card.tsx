@@ -20,6 +20,7 @@ import { Share2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { CopyButton } from '@/components/copy-button'
+import { CurrencyText } from '@/components/currency-display'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { IconBadge } from '@/components/ui/icon-badge'
@@ -92,7 +93,7 @@ export function AffiliateRewardsCard({
                 {label}
               </div>
               <div className='mt-0.5 truncate text-sm font-semibold tabular-nums'>
-                {value}
+                <CurrencyText>{value}</CurrencyText>
               </div>
             </div>
           ))}

@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useTranslation } from 'react-i18next'
 
+import { CurrencyIcon, CurrencyText } from '@/components/currency-display'
 import { QuotaDetailsPopover } from '@/components/quota-details-popover'
 import { StatusBadge } from '@/components/status-badge'
 import { formatQuotaWithCurrency, getCurrencyDisplay } from '@/lib/currency'
@@ -45,15 +46,35 @@ export function UserQuotaCell(props: UserQuotaCellProps) {
 
   return (
     <QuotaDetailsPopover
-      title={`${t('Quota')} (${quotaUnit})`}
+      title={
+        <>
+          {t('Quota')} (<CurrencyText>{quotaUnit}</CurrencyText>)
+        </>
+      }
       triggerLabel={
         hasQuota
           ? `${t('Available Balance')} ${formattedRemaining}; ${t('Used amount')} ${formattedUsed}`
           : t('No Quota')
       }
       details={[
-        { label: t('Available Balance'), value: formattedRemaining },
-        { label: t('Total Used'), value: formattedUsed },
+        {
+          label: t('Available Balance'),
+          value: (
+            <>
+              <CurrencyIcon />
+              {formattedRemaining}
+            </>
+          ),
+        },
+        {
+          label: t('Total Used'),
+          value: (
+            <>
+              <CurrencyIcon />
+              {formattedUsed}
+            </>
+          ),
+        },
       ]}
     >
       {hasQuota ? (
@@ -64,6 +85,7 @@ export function UserQuotaCell(props: UserQuotaCellProps) {
               props.remaining === 0 && 'text-muted-foreground'
             )}
           >
+            <CurrencyIcon />
             {formattedRemaining}
           </span>
           <span
@@ -71,7 +93,10 @@ export function UserQuotaCell(props: UserQuotaCellProps) {
             className='text-muted-foreground flex items-baseline gap-1 text-xs font-normal'
           >
             <span>{t('Used amount')}</span>
-            <span>{formattedUsed}</span>
+            <span>
+              <CurrencyIcon />
+              {formattedUsed}
+            </span>
           </span>
         </span>
       ) : (

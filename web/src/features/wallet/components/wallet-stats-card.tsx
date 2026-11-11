@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { Activity, BarChart3, WalletCards } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
+import { CurrencyText } from '@/components/currency-display'
 import { IconBadge, type IconBadgeTone } from '@/components/ui/icon-badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { formatQuota } from '@/lib/format'
@@ -90,7 +91,7 @@ export function WalletStatsCard(props: WalletStatsCardProps) {
           </div>
 
           <div className='text-foreground mt-1.5 font-mono text-sm font-bold tracking-tight break-all tabular-nums sm:mt-2.5 sm:text-2xl'>
-            {item.value}
+            <CurrencyText>{item.value}</CurrencyText>
           </div>
           <div className='text-muted-foreground/60 mt-1 hidden text-xs md:block'>
             {item.description}

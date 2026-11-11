@@ -22,6 +22,7 @@ import { ArrowRight, Flame, ShieldCheck, TrendingDown } from 'lucide-react'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { CurrencyText } from '@/components/currency-display'
 import { StaggerContainer, StaggerItem } from '@/components/page-transition'
 import { Button } from '@/components/ui/button'
 import { getUserQuotaDates } from '@/features/dashboard/api'
@@ -306,7 +307,7 @@ export function SummaryCards() {
             </div>
 
             <div className='font-mono text-xl font-semibold tracking-tight sm:text-2xl'>
-              {formatQuota(remainQuota)}
+              <CurrencyText>{formatQuota(remainQuota)}</CurrencyText>
             </div>
 
             <div className='grid grid-cols-2 gap-2'>
@@ -316,7 +317,7 @@ export function SummaryCards() {
                   <span className='truncate'>{t('Last 24h usage')}</span>
                 </div>
                 <div className='text-foreground mt-1.5 truncate text-xs font-semibold tabular-nums'>
-                  {formatQuota(recentUsage)}
+                  <CurrencyText>{formatQuota(recentUsage)}</CurrencyText>
                 </div>
               </div>
               <div className='bg-background/60 rounded-lg px-2.5 py-2'>

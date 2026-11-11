@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useTranslation } from 'react-i18next'
 
+import { CurrencyIcon, CurrencyText } from '@/components/currency-display'
 import { QuotaDetailsPopover } from '@/components/quota-details-popover'
 import { Progress } from '@/components/ui/progress'
 import { toIntlLocale } from '@/i18n/languages'
@@ -89,7 +90,11 @@ export function ApiKeyQuotaCell(props: ApiKeyQuotaCellProps) {
 
   return (
     <QuotaDetailsPopover
-      title={`${t('Quota')} (${quotaUnit})`}
+      title={
+        <>
+          {t('Quota')} (<CurrencyText>{quotaUnit}</CurrencyText>)
+        </>
+      }
       triggerLabel={
         props.variant === 'card'
           ? `${t('Quota')} (${quotaUnit}); ${triggerLabel}`
@@ -134,7 +139,9 @@ export function ApiKeyQuotaCell(props: ApiKeyQuotaCellProps) {
         {props.variant === 'card' && (
           <span className='text-muted-foreground'>
             {t('Remaining')}
-            <span className='ml-1'>({quotaUnit})</span>
+            <span className='ml-1'>
+              (<CurrencyText>{quotaUnit}</CurrencyText>)
+            </span>
           </span>
         )}
         <span
@@ -152,6 +159,7 @@ export function ApiKeyQuotaCell(props: ApiKeyQuotaCellProps) {
               'text-muted-foreground'
           )}
         >
+          {!props.apiKey.unlimited_quota && <CurrencyIcon />}
           {props.apiKey.unlimited_quota ? t('Unlimited') : formattedRemaining}
         </span>
         {props.variant === 'card' && (
@@ -163,6 +171,7 @@ export function ApiKeyQuotaCell(props: ApiKeyQuotaCellProps) {
             props.variant === 'card' && 'text-sm leading-5 font-normal'
           )}
         >
+          <CurrencyIcon />
           {formattedUsed}
         </span>
       </span>

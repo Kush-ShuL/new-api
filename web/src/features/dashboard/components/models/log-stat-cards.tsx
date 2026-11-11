@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { CurrencyText } from '@/components/currency-display'
 import { IconBadge } from '@/components/ui/icon-badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { getUserQuotaDates } from '@/features/dashboard/api'
@@ -174,7 +175,7 @@ export function LogStatCards(props: LogStatCardsProps) {
                   className='text-foreground mt-1 max-w-full truncate font-mono text-base leading-tight font-bold tracking-tight tabular-nums sm:mt-2 sm:text-2xl sm:leading-normal'
                   title={it.fullValue}
                 >
-                  {it.value}
+                  <CurrencyText>{it.value}</CurrencyText>
                 </div>
                 <div className='text-muted-foreground/60 mt-1 hidden text-xs md:block'>
                   {it.desc}

@@ -22,6 +22,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { ConfirmDialog } from '@/components/confirm-dialog'
+import { CurrencyText } from '@/components/currency-display'
 import {
   DataTableRowActionMenu,
   StaticDataTable,
@@ -339,9 +340,14 @@ export function UserSubscriptionsDialog(props: Props) {
                     const sub = record.subscription
                     const total = Number(sub.amount_total || 0)
                     const used = Number(sub.amount_used || 0)
-                    return total > 0
-                      ? `${formatQuota(used)}/${formatQuota(total)}`
-                      : t('Unlimited')
+                    return total > 0 ? (
+                      <>
+                        <CurrencyText>{formatQuota(used)}</CurrencyText>/
+                        <CurrencyText>{formatQuota(total)}</CurrencyText>
+                      </>
+                    ) : (
+                      t('Unlimited')
+                    )
                   },
                 },
                 {

@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { Activity, BarChart3, WalletCards } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
+import { CurrencyText } from '@/components/currency-display'
 import { StatusBadge } from '@/components/status-badge'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Card, CardContent } from '@/components/ui/card'
@@ -176,7 +177,7 @@ export function ProfileHeader({ profile, loading }: ProfileHeaderProps) {
               </div>
 
               <div className='text-foreground mt-1.5 truncate font-mono text-lg font-bold tracking-tight tabular-nums sm:mt-2 sm:text-2xl'>
-                {item.value}
+                <CurrencyText>{item.value}</CurrencyText>
               </div>
               <div className='text-muted-foreground/60 mt-1 hidden text-xs md:block'>
                 {item.description}

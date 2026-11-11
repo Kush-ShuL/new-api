@@ -35,6 +35,7 @@ export interface CurrencyConfig {
   usdExchangeRate: number
   /** Custom currency symbol configured by the admin (used when type === CUSTOM) */
   customCurrencySymbol: string
+  customCurrencyIcon?: string
   /** Exchange rate from USD to the custom currency (used when type === CUSTOM) */
   customCurrencyExchangeRate: number
 }
@@ -63,6 +64,7 @@ export const DEFAULT_CURRENCY_CONFIG: CurrencyConfig = {
   quotaPerUnit: 500000,
   usdExchangeRate: 1,
   customCurrencySymbol: '¤',
+  customCurrencyIcon: '',
   customCurrencyExchangeRate: 1,
 }
 

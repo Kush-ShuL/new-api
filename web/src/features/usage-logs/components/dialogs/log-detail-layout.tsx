@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import type { ReactNode } from 'react'
 
+import { CurrencyText } from '@/components/currency-display'
 import { IconBadge, type IconBadgeTone } from '@/components/ui/icon-badge'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
@@ -40,7 +41,7 @@ export function DetailRow(props: {
           props.muted && 'text-muted-foreground'
         )}
       >
-        {props.value}
+        <CurrencyText>{props.value}</CurrencyText>
       </span>
     </div>
   )

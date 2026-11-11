@@ -29,6 +29,7 @@ import { useEffect, useState, useMemo, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
+import { CurrencyText } from '@/components/currency-display'
 import { Dialog } from '@/components/dialog'
 import { Turnstile } from '@/components/turnstile'
 import { Button } from '@/components/ui/button'
@@ -349,7 +350,9 @@ export function CheckinCalendarCard({
               </div>
               <div className='bg-card p-3 text-center sm:p-5'>
                 <div className='text-xl font-semibold tracking-tight tabular-nums sm:text-2xl'>
-                  {formatQuotaWithCurrency(monthlyQuota, { digitsLarge: 0 })}
+                  <CurrencyText>
+                    {formatQuotaWithCurrency(monthlyQuota, { digitsLarge: 0 })}
+                  </CurrencyText>
                 </div>
                 <div className='text-muted-foreground mt-0.5 text-[10px] font-medium sm:mt-1 sm:text-xs'>
                   {t('This month')}
@@ -357,12 +360,14 @@ export function CheckinCalendarCard({
               </div>
               <div className='bg-card p-3 text-center sm:p-5'>
                 <div className='text-xl font-semibold tracking-tight tabular-nums sm:text-2xl'>
-                  {formatQuotaWithCurrency(
-                    checkinData?.stats?.total_quota || 0,
-                    {
-                      digitsLarge: 0,
-                    }
-                  )}
+                  <CurrencyText>
+                    {formatQuotaWithCurrency(
+                      checkinData?.stats?.total_quota || 0,
+                      {
+                        digitsLarge: 0,
+                      }
+                    )}
+                  </CurrencyText>
                 </div>
                 <div className='text-muted-foreground mt-0.5 text-[10px] font-medium sm:mt-1 sm:text-xs'>
                   {t('Total earned')}
@@ -451,7 +456,10 @@ export function CheckinCalendarCard({
                                 {t('Checked in')}
                               </div>
                               <div className='text-muted-foreground mt-0.5'>
-                                +{formatQuotaWithCurrency(quotaAwarded)}
+                                +
+                                <CurrencyText>
+                                  {formatQuotaWithCurrency(quotaAwarded)}
+                                </CurrencyText>
                               </div>
                             </div>
                           </TooltipContent>

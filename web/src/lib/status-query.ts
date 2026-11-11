@@ -86,6 +86,7 @@ export function mapStatusDataToConfig(
     customCurrencySymbol:
       (data.custom_currency_symbol as string | undefined)?.trim() ||
       DEFAULT_CURRENCY_CONFIG.customCurrencySymbol,
+    customCurrencyIcon: (data.custom_currency_icon as string | undefined) ?? '',
     customCurrencyExchangeRate: toNumber(
       data.custom_currency_exchange_rate,
       DEFAULT_CURRENCY_CONFIG.customCurrencyExchangeRate

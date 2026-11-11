@@ -20,6 +20,7 @@ import { Tag as TagIcon } from 'lucide-react'
 import { useMemo, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { CurrencyText } from '@/components/currency-display'
 import { StaticDataTable } from '@/components/data-table'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
@@ -557,20 +558,22 @@ export function DynamicPricingBreakdown({
                               compact ? 'text-xs' : 'text-sm font-semibold'
                             )}
                           >
-                            {value > 0 ||
-                            ((field.unit === 'request' ||
-                              field.unit === 'image') &&
-                              Number.isFinite(value))
-                              ? formatBreakdownPrice(
-                                  value,
-                                  field,
-                                  symbol,
-                                  rate,
-                                  t,
-                                  taskPriceOptions,
-                                  i18n.language
-                                )
-                              : '-'}
+                            <CurrencyText>
+                              {value > 0 ||
+                              ((field.unit === 'request' ||
+                                field.unit === 'image') &&
+                                Number.isFinite(value))
+                                ? formatBreakdownPrice(
+                                    value,
+                                    field,
+                                    symbol,
+                                    rate,
+                                    t,
+                                    taskPriceOptions,
+                                    i18n.language
+                                  )
+                                : '-'}
+                            </CurrencyText>
                           </div>
                         </div>
                       )
@@ -678,15 +681,17 @@ export function DynamicPricingBreakdown({
                     ((field.unit === 'request' || field.unit === 'image') &&
                       Number.isFinite(value)) ? (
                     <span className={cn(!compact && 'font-semibold')}>
-                      {formatBreakdownPrice(
-                        value,
-                        field,
-                        symbol,
-                        rate,
-                        t,
-                        taskPriceOptions,
-                        i18n.language
-                      )}
+                      <CurrencyText>
+                        {formatBreakdownPrice(
+                          value,
+                          field,
+                          symbol,
+                          rate,
+                          t,
+                          taskPriceOptions,
+                          i18n.language
+                        )}
+                      </CurrencyText>
                     </span>
                   ) : (
                     '-'

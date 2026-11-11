@@ -21,6 +21,7 @@ import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
+import { CurrencyText } from '@/components/currency-display'
 import { Dialog } from '@/components/dialog'
 import { GroupBadge } from '@/components/group-badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -272,7 +273,9 @@ export function SubscriptionPurchaseDialog(props: Props) {
             </span>
             <span className='flex items-center gap-1 text-sm'>
               <Package className='h-3.5 w-3.5' />
-              {totalAmount > 0 ? formatQuota(totalAmount) : t('Unlimited')}
+              <CurrencyText>
+                {totalAmount > 0 ? formatQuota(totalAmount) : t('Unlimited')}
+              </CurrencyText>
             </span>
           </div>
           {plan.upgrade_group && (
@@ -302,11 +305,15 @@ export function SubscriptionPurchaseDialog(props: Props) {
         <div className='flex flex-col gap-2 rounded-md border p-3'>
           <div className='flex items-center justify-between gap-2 text-xs'>
             <span className='text-muted-foreground'>{t('Required')}</span>
-            <span>{formatQuota(balanceCost)}</span>
+            <span>
+              <CurrencyText>{formatQuota(balanceCost)}</CurrencyText>
+            </span>
           </div>
           <div className='flex items-center justify-between gap-2 text-xs'>
             <span className='text-muted-foreground'>{t('Available')}</span>
-            <span>{formatQuota(userQuota)}</span>
+            <span>
+              <CurrencyText>{formatQuota(userQuota)}</CurrencyText>
+            </span>
           </div>
           {!allowBalancePay ? (
             <Alert variant='destructive'>

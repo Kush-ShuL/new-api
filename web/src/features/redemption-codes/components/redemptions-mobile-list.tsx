@@ -20,6 +20,7 @@ import type { Table as TanstackTable } from '@tanstack/react-table'
 import { Database } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
+import { CurrencyText } from '@/components/currency-display'
 import { DISABLED_ROW_MOBILE } from '@/components/data-table'
 import { MaskedValueDisplay } from '@/components/masked-value-display'
 import { StatusBadge } from '@/components/status-badge'
@@ -164,7 +165,7 @@ export function RedemptionsMobileList(props: RedemptionsMobileListProps) {
             <div className='flex items-center justify-between gap-2 text-xs'>
               <span className='text-muted-foreground'>{t('Quota')}</span>
               <span className='font-medium tabular-nums'>
-                {formatQuota(redemption.quota)}
+                <CurrencyText>{formatQuota(redemption.quota)}</CurrencyText>
               </span>
             </div>
           </div>

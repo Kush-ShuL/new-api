@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
+import { CurrencyText } from '@/components/currency-display'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -101,11 +102,13 @@ export function PaymentConfirmDialog({
             ) : (
               <div className='flex items-baseline gap-2'>
                 <span className='text-2xl font-semibold'>
-                  {formatCurrency(paymentAmount)}
+                  <CurrencyText>{formatCurrency(paymentAmount)}</CurrencyText>
                 </span>
                 {hasDiscount && (
                   <span className='text-muted-foreground text-sm line-through'>
-                    {formatCurrency(originalAmount)}
+                    <CurrencyText>
+                      {formatCurrency(originalAmount)}
+                    </CurrencyText>
                   </span>
                 )}
               </div>
@@ -117,7 +120,7 @@ export function PaymentConfirmDialog({
               <div className='flex items-center justify-between text-sm'>
                 <span className='text-muted-foreground'>{t('You save')}</span>
                 <span className='font-semibold text-green-600'>
-                  {formatCurrency(discountAmount)}
+                  <CurrencyText>{formatCurrency(discountAmount)}</CurrencyText>
                 </span>
               </div>
             </div>
