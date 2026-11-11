@@ -67,7 +67,7 @@ func GetAllLogs(c *gin.Context) {
 		model.FormatRootLogs(logs)
 	}
 	pageInfo.SetTotal(int(total))
-	pageInfo.SetItems(logs)
+	pageInfo.SetItems(logsWithAvatars(logs))
 	common.ApiSuccess(c, pageInfo)
 	return
 }
@@ -89,7 +89,7 @@ func GetUserLogs(c *gin.Context) {
 		return
 	}
 	pageInfo.SetTotal(int(total))
-	pageInfo.SetItems(logs)
+	pageInfo.SetItems(logsWithAvatars(logs))
 	common.ApiSuccess(c, pageInfo)
 	return
 }

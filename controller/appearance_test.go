@@ -20,7 +20,10 @@ package controller
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"fmt"
+	"image"
+	"image/png"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -30,6 +33,9 @@ import (
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/middleware"
+	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/service"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -102,4 +108,86 @@ func TestBackgroundUploadRejectsInvalidTypeSizeAndOffsets(t *testing.T) {
 			assert.Equal(t, false, result["success"])
 		})
 	}
+}
+
+func TestAvatarUploadValidatesImagesLimitsAndChunkOwnership(t *testing.T) {
+	t.Chdir(t.TempDir())
+	userID := 1
+	router := gin.New()
+	router.POST("/upload", func(c *gin.Context) { c.Set("id", userID); UploadUserAvatar(c) })
+	var content bytes.Buffer
+	require.NoError(t, png.Encode(&content, image.NewNRGBA(image.Rect(0, 0, 4, 4))))
+	data := content.Bytes()
+	id := "12345678-1234-1234-1234-123456789abc"
+	first := postBackgroundChunk(t, router, id, 0, len(data), data[:8])
+	require.Equal(t, true, first["success"])
+	userID = 2
+	assert.Equal(t, false, postBackgroundChunk(t, router, id, 8, len(data), data[8:])["success"])
+	userID = 1
+	complete := postBackgroundChunk(t, router, id, 8, len(data), data[8:])
+	require.Equal(t, true, complete["success"])
+	assert.NotEmpty(t, complete["data"].(map[string]any)["url"])
+	for _, test := range []struct {
+		id    string
+		total int
+		data  []byte
+	}{
+		{"22345678-1234-1234-1234-123456789abc", 6, []byte("<svg/>")},
+		{"32345678-1234-1234-1234-123456789abc", maxAvatarImageBytes + 1, []byte("x")},
+		{"42345678-1234-1234-1234-123456789abc", 8, []byte("\x89PNG\r\n\x1a\n")},
+	} {
+		assert.Equal(t, false, postBackgroundChunk(t, router, test.id, 0, test.total, test.data)["success"])
+	}
+}
+
+func TestAvatarUpdateUsesAuthenticatedUserAndCleansReplacedImage(t *testing.T) {
+	root, _ := setupSecurityEnrollmentTest(t)
+	t.Chdir(t.TempDir())
+	require.NoError(t, model.DB.AutoMigrate(&model.Model{}, &model.Vendor{}))
+	other := &model.User{Username: "avatar-other", AffCode: "avatar-other", Password: root.Password, Role: common.RoleCommonUser, Status: common.UserStatusEnabled, AuthVersion: 1}
+	require.NoError(t, model.DB.Create(other).Error)
+	bundle, err := service.CreateLoginSession(other.Id, "password", "127.0.0.1", "avatar-test")
+	require.NoError(t, err)
+	var data bytes.Buffer
+	require.NoError(t, png.Encode(&data, image.NewNRGBA(image.Rect(0, 0, 4, 4))))
+	name := fmt.Sprintf("%x.png", sha256.Sum256(data.Bytes()))
+	require.NoError(t, os.MkdirAll(backgroundImageDirectory, 0755))
+	path := filepath.Join(backgroundImageDirectory, name)
+	require.NoError(t, os.WriteFile(path, data.Bytes(), 0600))
+	url := common.UploadedImageURLPrefix + name
+	router := gin.New()
+	router.PUT("/api/user/self/avatar", middleware.UserAuth(), UpdateUserAvatar)
+	request := httptest.NewRequest(http.MethodPut, "/api/user/self/avatar", strings.NewReader(`{"url":"`+url+`","user_id":1,"role":100,"quota":999999}`))
+	request.Header.Set("Authorization", "Bearer "+bundle.AccessToken)
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	assert.Equal(t, http.StatusOK, response.Code)
+	assert.Contains(t, response.Body.String(), `"success":true`)
+	stored, err := model.GetUserById(other.Id, false)
+	require.NoError(t, err)
+	assert.Equal(t, url, stored.GetSetting().AvatarURL)
+	assert.Equal(t, common.RoleCommonUser, stored.Role)
+	assert.Zero(t, stored.Quota)
+	unchanged, err := model.GetUserById(root.Id, false)
+	require.NoError(t, err)
+	assert.Empty(t, unchanged.GetSetting().AvatarURL)
+	for _, invalid := range []string{"javascript:alert(1)", "../../secret.png", common.UploadedImageURLPrefix + strings.Repeat("f", 64) + ".png"} {
+		request = httptest.NewRequest(http.MethodPut, "/api/user/self/avatar", strings.NewReader(`{"url":"`+invalid+`"}`))
+		request.Header.Set("Authorization", "Bearer "+bundle.AccessToken)
+		response = httptest.NewRecorder()
+		router.ServeHTTP(response, request)
+		assert.Contains(t, response.Body.String(), `"success":false`)
+	}
+	request = httptest.NewRequest(http.MethodPut, "/api/user/self/avatar", strings.NewReader(`{"url":""}`))
+	response = httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	assert.Equal(t, http.StatusUnauthorized, response.Code)
+	request = httptest.NewRequest(http.MethodPut, "/api/user/self/avatar", strings.NewReader(`{"url":""}`))
+	request.Header.Set("Authorization", "Bearer "+bundle.AccessToken)
+	response = httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	assert.Equal(t, http.StatusOK, response.Code)
+	assert.Contains(t, response.Body.String(), `"success":true`)
+	assert.NoFileExists(t, path)
 }

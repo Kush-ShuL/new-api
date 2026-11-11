@@ -59,7 +59,9 @@ const inFlightGet = new Map<string, Promise<unknown>>()
 const originalGet = api.get.bind(api)
 
 api.get = ((url: string, config: ApiRequestConfig = {}) => {
-  if (config.disableDuplicate) return originalGet(url, config)
+  // Cancellable requests have their own lifecycle; sharing one can reuse an
+  // already-aborted request when a query remounts.
+  if (config.disableDuplicate || config.signal) return originalGet(url, config)
 
   const params = config.params ? JSON.stringify(config.params) : '{}'
   const sessionSID = useAuthStore.getState().auth.session?.sid || 'anonymous'

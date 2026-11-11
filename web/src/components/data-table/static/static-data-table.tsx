@@ -34,7 +34,10 @@ import { staticDataTableClassNames } from './static-data-table-classnames'
 type StaticDataTableBaseProps = {
   className?: string
   tableClassName?: string
-  containerProps?: Omit<React.ComponentProps<'div'>, 'className' | 'children'>
+  containerProps?: Omit<
+    React.ComponentProps<'div'>,
+    'className' | 'children'
+  > & { 'data-table-scroll-viewport'?: boolean }
   tableProps?: Omit<
     React.ComponentProps<typeof Table>,
     'className' | 'children'

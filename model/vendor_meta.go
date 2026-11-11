@@ -55,6 +55,7 @@ func IsVendorNameDuplicated(id int, name string) (bool, error) {
 
 // Update 更新供应商记录
 func (v *Vendor) Update() error {
+	var previousImages []string
 	err := metadataTransaction(func(tx *gorm.DB) error {
 		var saved Vendor
 		if err := tx.First(&saved, v.Id).Error; err != nil {
@@ -67,11 +68,13 @@ func (v *Vendor) Update() error {
 			return err
 		}
 		v.CreatedTime, v.Status, v.UpdatedTime = saved.CreatedTime, saved.Status, common.GetTimestamp()
+		previousImages = []string{saved.Icon, saved.Description}
 		return tx.Model(&Vendor{}).Where("id = ?", v.Id).Updates(map[string]any{"name": v.Name, "description": v.Description, "icon": v.Icon, "updated_time": v.UpdatedTime}).Error
 	})
 	if err == nil {
 		v.Version = VendorRecordVersion(v)
 		RefreshPricing()
+		CleanupReplacedUploadedImages(previousImages...)
 	}
 	return err
 }

@@ -26,6 +26,7 @@ import { GroupBadge } from '@/components/group-badge'
 import { LongText } from '@/components/long-text'
 import { StatusBadge } from '@/components/status-badge'
 import { TableId } from '@/components/table-id'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
   Tooltip,
@@ -103,6 +104,12 @@ export function useUsersColumns(): ColumnDef<User>[] {
           return (
             <div className='flex min-w-[160px] flex-col gap-1'>
               <div className='flex items-center gap-2'>
+                {row.original.avatar_url && (
+                  <Avatar className='size-7'>
+                    <AvatarImage src={row.original.avatar_url} alt={username} />
+                    <AvatarFallback>{username.slice(0, 1)}</AvatarFallback>
+                  </Avatar>
+                )}
                 <LongText className='max-w-[140px] text-sm font-normal'>
                   {username}
                 </LongText>

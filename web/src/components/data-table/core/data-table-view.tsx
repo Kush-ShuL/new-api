@@ -19,7 +19,13 @@ For commercial licensing, please contact support@quantumnous.com
 import type { Row, Table as TanstackTable } from '@tanstack/react-table'
 import * as React from 'react'
 
-import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableRow,
+  updateTableScrollClip,
+} from '@/components/ui/table'
 import { cn } from '@/lib/utils'
 
 import {
@@ -137,6 +143,8 @@ function SplitHeaderTableView<TData>({
       )}
     >
       <div
+        data-table-scroll-viewport
+        onScroll={updateTableScrollClip}
         className={cn(
           'min-h-0 flex-1 overflow-auto',
           '**:data-[slot=table-header]:[--table-header-bg:var(--table-header)]',

@@ -120,6 +120,26 @@ test('keeps text symbols when no image is configured and for other currencies', 
   expect(view.container).toHaveTextContent('$2.5')
 })
 
+test('replaces every formatted price in a billing summary while leaving ordinary text alone', () => {
+  useSystemConfigStore.getState().setConfig({
+    currency: {
+      ...DEFAULT_CURRENCY_CONFIG,
+      quotaDisplayType: 'CUSTOM',
+      customCurrencySymbol: 'Credits',
+      customCurrencyIcon: '/coin.png',
+    },
+  })
+  const view = render(
+    <>
+      <CurrencyText embedded>Standard · Credits0.3 / Credits1.2/M</CurrencyText>
+      <CurrencyText>Credits model</CurrencyText>
+    </>
+  )
+  expect(screen.getAllByRole('img', { name: 'Credits' })).toHaveLength(2)
+  expect(view.container).toHaveTextContent('0.3 / 1.2/M')
+  expect(view.container).toHaveTextContent('Credits model')
+})
+
 test('uses the same image in column labels and translated monetary hints', () => {
   useSystemConfigStore.getState().setConfig({
     currency: {

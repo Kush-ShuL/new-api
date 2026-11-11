@@ -48,10 +48,34 @@ export function CurrencyIcon(props: { fallback?: boolean }): ReactNode {
 export function CurrencyText(props: {
   children: ReactNode
   label?: boolean
+  embedded?: boolean
 }): ReactNode {
   const currency = useSystemConfigStore((state) => state.config.currency)
   const symbol = currency.customCurrencySymbol
   const text = props.children
+  if (
+    props.embedded &&
+    currency.quotaDisplayType === 'CUSTOM' &&
+    currency.customCurrencyIcon &&
+    symbol &&
+    typeof text === 'string'
+  ) {
+    const amounts = new RegExp(
+      `${symbol.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*[-+]?\\d[\\d.,]*`,
+      'g'
+    )
+    const parts: ReactNode[] = []
+    let offset = 0
+    for (const match of text.matchAll(amounts)) {
+      parts.push(
+        text.slice(offset, match.index),
+        <CurrencyText key={match.index}>{match[0]}</CurrencyText>
+      )
+      offset = match.index + match[0].length
+    }
+    parts.push(text.slice(offset))
+    return parts
+  }
   if (
     props.label &&
     currency.quotaDisplayType === 'CUSTOM' &&
@@ -74,8 +98,8 @@ export function CurrencyText(props: {
     typeof text !== 'string' ||
     !text.startsWith(symbol) ||
     (text !== symbol &&
-      !text.startsWith(`${symbol} `) &&
-      !/^[-+]?\d/.test(text.slice(symbol.length)))
+      !/^\s*[-+]?\d/.test(text.slice(symbol.length)) &&
+      !/^\s*\//.test(text.slice(symbol.length)))
   ) {
     return props.children
   }

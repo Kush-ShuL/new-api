@@ -152,6 +152,36 @@ html[data-glass-ui] [data-slot='table-header'] [data-slot='table-row'] {
   background-color: transparent;
 }
 
+/* Rows are clipped below a translucent sticky header instead of painting
+   through it. This preserves the configured glass opacity. */
+html[data-glass-ui] [data-table-scroll-viewport] [data-slot='table-body'] {
+  clip-path: inset(var(--table-scroll-top, 0px) 0 0);
+}
+
+html[data-glass-ui] .availability-table [data-availability-hour] {
+  clip-path: inset(
+    0 0 0
+      clamp(
+        0px,
+        calc(var(--table-scroll-left, 0px) - var(--availability-column-left)),
+        100%
+      )
+  );
+}
+
+html[data-glass-ui] [data-slot='table-head'][scope='row'].sticky {
+  background-color: color-mix(
+    in srgb,
+    var(--background) var(--glass-opacity, 85%),
+    transparent
+  );
+  backdrop-filter: blur(var(--glass-blur, 20px)) saturate(120%);
+}
+
+html[data-glass-ui] [data-slot='table-header'] [data-slot='table-head'].sticky {
+  backdrop-filter: blur(var(--glass-blur, 20px)) saturate(120%);
+}
+
 /* Match frozen and scrolling columns, including hover and selection. */
 html[data-glass-ui] [data-slot='table-body'] [data-slot='table-row'] {
   background-color: transparent;

@@ -21,6 +21,10 @@ package controller
 import (
 	"crypto/sha256"
 	"fmt"
+	"image"
+	_ "image/gif"
+	_ "image/jpeg"
+	_ "image/png"
 	"io"
 	"net/http"
 	"os"
@@ -28,22 +32,31 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/model"
 	"github.com/gin-gonic/gin"
+	_ "golang.org/x/image/webp"
 )
 
 const maxBackgroundImageBytes = 100 << 20
-const backgroundImageDirectory = "uploads/backgrounds"
+const backgroundImageDirectory = common.UploadedImageDirectory
+const maxAvatarImageBytes = 5 << 20
 
-var backgroundImageName = regexp.MustCompile(`^[a-f0-9]{64}\.(png|jpg|gif|webp)$`)
+var backgroundImageName = common.UploadedImageName
 var backgroundUploadID = regexp.MustCompile(`^[a-f0-9-]{36}$`)
-var backgroundUploadMutex sync.Mutex
 
 // Uploads live alongside the mounted data directory; options contain only a URL.
 func UploadAppearanceBackground(c *gin.Context) {
+	uploadProfileImage(c, maxBackgroundImageBytes)
+}
+
+func UploadUserAvatar(c *gin.Context) {
+	uploadProfileImage(c, maxAvatarImageBytes)
+}
+
+func uploadProfileImage(c *gin.Context, maxBytes int64) {
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 9<<20)
 	if err := c.Request.ParseMultipartForm(1 << 20); err != nil {
 		common.ApiErrorT(c, "Failed to upload image")
@@ -55,9 +68,9 @@ func UploadAppearanceBackground(c *gin.Context) {
 	total, totalErr := strconv.ParseInt(c.Query("total"), 10, 64)
 	header, err := c.FormFile("image")
 	if err != nil || offsetErr != nil || totalErr != nil || !backgroundUploadID.MatchString(uploadID) ||
-		offset < 0 || total <= 0 || total > maxBackgroundImageBytes || header.Size <= 0 ||
+		offset < 0 || total <= 0 || total > maxBytes || header.Size <= 0 ||
 		header.Size > 8<<20 || offset+header.Size > total {
-		common.ApiErrorT(c, "Background image must be PNG, JPEG, WebP, or GIF and no larger than 100 MB.")
+		common.ApiErrorT(c, "Choose a PNG, JPEG, WebP, or GIF image up to {{size}} MB.", map[string]any{"size": maxBytes >> 20})
 		return
 	}
 	source, err := header.Open()
@@ -66,13 +79,13 @@ func UploadAppearanceBackground(c *gin.Context) {
 		return
 	}
 	defer source.Close()
-	backgroundUploadMutex.Lock()
-	defer backgroundUploadMutex.Unlock()
+	common.UploadedImageMutex.Lock()
+	defer common.UploadedImageMutex.Unlock()
 	if err = os.MkdirAll(backgroundImageDirectory, 0755); err != nil {
 		common.ApiErrorT(c, "Failed to upload image")
 		return
 	}
-	path := filepath.Join(backgroundImageDirectory, ".upload-"+uploadID)
+	path := filepath.Join(backgroundImageDirectory, fmt.Sprintf(".upload-%d-%s", c.GetInt("id"), uploadID))
 	flags := os.O_RDWR
 	if offset == 0 {
 		flags |= os.O_CREATE | os.O_EXCL
@@ -109,6 +122,12 @@ func UploadAppearanceBackground(c *gin.Context) {
 		return
 	}
 	defer os.Remove(path)
+	if maxBytes == maxAvatarImageBytes {
+		if err := validateAvatarImage(file); err != nil {
+			common.ApiErrorT(c, "Invalid avatar image")
+			return
+		}
+	}
 	_, _ = file.Seek(0, io.SeekStart)
 	var prefix [512]byte
 	n, _ := io.ReadFull(file, prefix[:])
@@ -138,6 +157,109 @@ func UploadAppearanceBackground(c *gin.Context) {
 		return
 	}
 	common.ApiSuccess(c, gin.H{"url": "/api/appearance/background/" + name})
+}
+
+func validateAvatarImage(file *os.File) error {
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return err
+	}
+	info, err := file.Stat()
+	if err != nil {
+		return err
+	}
+	if info.Size() > maxAvatarImageBytes {
+		return fmt.Errorf("avatar image is too large")
+	}
+	config, _, err := image.DecodeConfig(file)
+	if err != nil {
+		return err
+	}
+	if config.Width < 1 || config.Height < 1 || config.Width > 4096 || config.Height > 4096 {
+		return fmt.Errorf("invalid avatar dimensions")
+	}
+	return nil
+}
+
+func UpdateUserAvatar(c *gin.Context) {
+	var request struct {
+		URL string `json:"url"`
+	}
+	if err := common.DecodeJson(c.Request.Body, &request); err != nil {
+		common.ApiErrorT(c, "Invalid parameters")
+		return
+	}
+	// Avatars use our authenticated upload path; external image fetching is
+	// unnecessary and replacing a URL cannot overwrite another user's files.
+	if request.URL != "" {
+		name, local := strings.CutPrefix(request.URL, common.UploadedImageURLPrefix)
+		if !local || !backgroundImageName.MatchString(name) {
+			common.ApiErrorT(c, "Invalid avatar image")
+			return
+		}
+		file, err := os.Open(filepath.Join(backgroundImageDirectory, name))
+		if err != nil {
+			common.ApiErrorT(c, "Invalid avatar image")
+			return
+		}
+		err = validateAvatarImage(file)
+		_ = file.Close()
+		if err != nil {
+			common.ApiErrorT(c, "Invalid avatar image")
+			return
+		}
+	}
+	user, err := model.UpdateUserAvatar(c.GetInt("id"), request.URL)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, buildSelfUserData(user))
+}
+
+type userWithAvatar struct {
+	*model.User
+	AvatarURL string `json:"avatar_url,omitempty"`
+}
+
+func usersWithAvatars(users []*model.User) []userWithAvatar {
+	result := make([]userWithAvatar, 0, len(users))
+	for _, user := range users {
+		result = append(result, userWithAvatar{User: user, AvatarURL: user.GetSetting().AvatarURL})
+	}
+	return result
+}
+
+type logWithAvatar struct {
+	*model.Log
+	AvatarURL string `json:"avatar_url,omitempty"`
+}
+
+func logsWithAvatars(logs []*model.Log) []logWithAvatar {
+	ids := make(map[int]struct{})
+	for _, entry := range logs {
+		ids[entry.UserId] = struct{}{}
+	}
+	userIDs := make([]int, 0, len(ids))
+	for id := range ids {
+		if id > 0 {
+			userIDs = append(userIDs, id)
+		}
+	}
+	var users []*model.User
+	if len(userIDs) > 0 {
+		if err := model.DB.Select("id", "setting").Where("id IN ?", userIDs).Find(&users).Error; err != nil {
+			common.SysError(common.LogText("Failed to load user avatars: %v", err))
+		}
+	}
+	avatars := make(map[int]string, len(users))
+	for _, user := range users {
+		avatars[user.Id] = user.GetSetting().AvatarURL
+	}
+	result := make([]logWithAvatar, 0, len(logs))
+	for _, entry := range logs {
+		result = append(result, logWithAvatar{Log: entry, AvatarURL: avatars[entry.UserId]})
+	}
+	return result
 }
 
 func GetAppearanceBackground(c *gin.Context) {

@@ -345,7 +345,7 @@ func GetAllUsers(c *gin.Context) {
 	}
 
 	pageInfo.SetTotal(int(total))
-	pageInfo.SetItems(users)
+	pageInfo.SetItems(usersWithAvatars(users))
 
 	common.ApiSuccess(c, pageInfo)
 	return
@@ -375,7 +375,7 @@ func SearchUsers(c *gin.Context) {
 	}
 
 	pageInfo.SetTotal(int(total))
-	pageInfo.SetItems(users)
+	pageInfo.SetItems(usersWithAvatars(users))
 	common.ApiSuccess(c, pageInfo)
 	return
 }
@@ -519,6 +519,7 @@ func buildSelfUserData(user *model.User) map[string]any {
 		"inviter_id":        user.InviterId,
 		"linux_do_id":       user.LinuxDOId,
 		"setting":           user.Setting,
+		"avatar_url":        userSetting.AvatarURL,
 		"stripe_customer":   user.StripeCustomer,
 		"sidebar_modules":   userSetting.SidebarModules, // 正确提取sidebar_modules字段
 		"permissions":       permissions,

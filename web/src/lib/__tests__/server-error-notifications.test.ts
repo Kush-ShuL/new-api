@@ -49,6 +49,29 @@ afterEach(() => {
   window.history.replaceState({}, '', '/')
 })
 
+it('starts a fresh query when the previous cancellable request was aborted', async () => {
+  const adapter = vi.fn<AxiosAdapter>(async (config) => ({
+    data: { success: true },
+    status: 200,
+    statusText: 'OK',
+    headers: {},
+    config,
+  }))
+  api.defaults.adapter = adapter
+  const previous = new AbortController()
+  const cancelled = api
+    .get('/api/model-availability', { signal: previous.signal })
+    .catch((error: unknown) => error)
+  previous.abort()
+  const response = await api.get('/api/model-availability', {
+    signal: new AbortController().signal,
+  })
+
+  expect(await cancelled).toBeInstanceOf(CanceledError)
+  expect(response.data).toEqual({ success: true })
+  expect(adapter).toHaveBeenCalledOnce()
+})
+
 it('reports the pricing rejection once when the request error reaches multiple handlers', async () => {
   const message = 'model_pricing: unknown name fixed (1:16)'
   const notify = vi.spyOn(toast, 'error').mockReturnValue('pricing-error')

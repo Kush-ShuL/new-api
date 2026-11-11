@@ -21,9 +21,10 @@ import { GitBranch, Sparkles, KeyRound } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { CurrencyText } from '@/components/currency-display'
 import { GroupBadge } from '@/components/group-badge'
 import { StatusBadge, type StatusBadgeProps } from '@/components/status-badge'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
   Popover,
   PopoverContent,
@@ -81,6 +82,7 @@ import { useUsageLogsContext } from '../usage-logs-provider'
 
 interface DetailSegment {
   text: string
+  currency?: boolean
   muted?: boolean
   danger?: boolean
 }
@@ -161,6 +163,7 @@ function buildTypeDetailSegments(
     }
     segments.push({
       text: `${t('Fee')}: ${formatLogQuota(other?.fee_quota ?? log.quota)}`,
+      currency: true,
       muted: true,
     })
     return segments
@@ -207,6 +210,7 @@ function buildTypeDetailSegments(
       }
       segments.push({
         text: `${tier.label || t('Default')} · ${prices.join(' · ')}`,
+        currency: true,
       })
     } else {
       segments.push({
@@ -223,6 +227,7 @@ function buildTypeDetailSegments(
         const tierLabel = tieredSummary.tier.label || t('Default')
         segments.push({
           text: `${tierLabel} · ${formatPriceList(baseEntries, true)}`,
+          currency: true,
         })
       }
 
@@ -241,6 +246,7 @@ function buildTypeDetailSegments(
       if (cacheEntries.length > 0) {
         segments.push({
           text: `${t('Cache')} ${formatPriceList(cacheEntries, false)}`,
+          currency: true,
           muted: true,
         })
       }
@@ -265,6 +271,7 @@ function buildTypeDetailSegments(
       if (otherEntries.length > 0) {
         segments.push({
           text: otherEntries.join(' · '),
+          currency: true,
           muted: true,
         })
       }
@@ -280,6 +287,7 @@ function buildTypeDetailSegments(
     if (isPerCall && modelPrice != null) {
       segments.push({
         text: `${t('Per-call')} · ${formatBillingCurrencyFromUSD(modelPrice, priceOpts)}`,
+        currency: true,
       })
     } else if (other.model_ratio != null) {
       const inputPriceUSD = other.model_ratio * 2.0
@@ -291,6 +299,7 @@ function buildTypeDetailSegments(
       }
       segments.push({
         text: `${t('Standard')} · ${formatPriceList(baseEntries, true)}`,
+        currency: true,
       })
 
       if (hasAnyCacheTokens(other)) {
@@ -314,6 +323,7 @@ function buildTypeDetailSegments(
         if (cacheEntries.length > 0) {
           segments.push({
             text: `${t('Cache')} ${formatPriceList(cacheEntries, false)}`,
+            currency: true,
             muted: true,
           })
         }
@@ -577,6 +587,9 @@ export function useCommonLogsColumns(
                 }}
               >
                 <Avatar className='ring-border/60 size-6 ring-1 max-sm:hidden'>
+                  {sensitiveVisible && (
+                    <AvatarImage src={log.avatar_url} alt={log.username} />
+                  )}
                   <AvatarFallback
                     className={cn(
                       'text-[11px] font-semibold',
@@ -858,7 +871,11 @@ export function useCommonLogsColumns(
                   primaryTextClass
                 )}
               >
-                {primary.text}
+                {primary.currency ? (
+                  <CurrencyText embedded>{primary.text}</CurrencyText>
+                ) : (
+                  primary.text
+                )}
                 {hasMore && (
                   <span className='text-muted-foreground/40 ml-0.5'>
                     +{segments.length - 1}

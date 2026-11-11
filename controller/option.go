@@ -430,6 +430,9 @@ func UpdateOption(c *gin.Context) {
 		common.ApiSuccess(c, change)
 		return
 	}
+	common.OptionMapRWMutex.RLock()
+	previousValue := common.OptionMap[option.Key]
+	common.OptionMapRWMutex.RUnlock()
 	err = model.UpdateOption(option.Key, option.Value.(string))
 	if err != nil {
 		if errors.Is(err, system_setting.ErrPasskeyRPIDInvalid) {
@@ -439,6 +442,7 @@ func UpdateOption(c *gin.Context) {
 		}
 		return
 	}
+	model.CleanupReplacedUploadedImages(previousValue)
 	// 出于安全考虑只记录被修改的配置项名称，不记录配置值（可能含密钥等敏感信息）。
 	recordManageAudit(c, "option.update", map[string]any{
 		"key": option.Key,

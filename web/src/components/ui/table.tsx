@@ -22,6 +22,17 @@ import * as React from 'react'
 
 import { cn } from '@/lib/utils'
 
+function updateTableScrollClip(event: React.UIEvent<HTMLElement>) {
+  event.currentTarget.style.setProperty(
+    '--table-scroll-top',
+    `${event.currentTarget.scrollTop}px`
+  )
+  event.currentTarget.style.setProperty(
+    '--table-scroll-left',
+    `${event.currentTarget.scrollLeft}px`
+  )
+}
+
 function Table({
   className,
   withContainer = true,
@@ -137,6 +148,7 @@ function TableCaption({
 }
 
 export {
+  updateTableScrollClip,
   Table,
   TableHeader,
   TableBody,

@@ -259,7 +259,11 @@ func IsModelNameDuplicated(id int, name string) (bool, error) {
 }
 
 func (mi *Model) Update() error {
-	return metadataTransaction(func(tx *gorm.DB) error {
+	var previous Model
+	err := metadataTransaction(func(tx *gorm.DB) error {
+		if err := tx.Select("icon", "description").First(&previous, mi.Id).Error; err != nil {
+			return err
+		}
 		if err := validateModelVendor(tx, mi.VendorID); err != nil {
 			return err
 		}
@@ -267,6 +271,10 @@ func (mi *Model) Update() error {
 		return tx.Model(&Model{}).Where("id = ?", mi.Id).
 			Select("model_name", "description", "icon", "tags", "vendor_id", "endpoints", "status", "sync_official", "name_rule", "updated_time").Updates(mi).Error
 	})
+	if err == nil {
+		CleanupReplacedUploadedImages(previous.Icon, previous.Description)
+	}
+	return err
 }
 
 func (mi *Model) Delete() error {
@@ -300,6 +308,7 @@ func DeleteModelMetadata(ids []int, removeFromChannels, removePricing bool) (Mod
 	}
 	sort.Ints(modelIDs)
 	names := make(map[string]struct{}, len(modelIDs))
+	var previousImages []string
 	deleteRecords := func(tx *gorm.DB) error {
 		var records []Model
 		if err := lockForUpdate(tx).Where("id IN ?", modelIDs).Order("id").Find(&records).Error; err != nil {
@@ -309,6 +318,7 @@ func DeleteModelMetadata(ids []int, removeFromChannels, removePricing bool) (Mod
 			return errors.New("selected models changed; reload before deleting")
 		}
 		for _, record := range records {
+			previousImages = append(previousImages, record.Icon, record.Description)
 			if removeFromChannels && record.NameRule != NameRuleExact {
 				return errors.New("only exact-match models can be removed from channels")
 			}
@@ -379,6 +389,7 @@ func DeleteModelMetadata(ids []int, removeFromChannels, removePricing bool) (Mod
 		InitChannelCache()
 	}
 	RefreshPricing()
+	CleanupReplacedUploadedImages(previousImages...)
 	return result, nil
 }
 

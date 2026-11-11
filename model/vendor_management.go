@@ -212,6 +212,7 @@ func DeleteVendors(ids []int) error {
 
 func applyVendorOperation(operation VendorOperation) (*VendorOperationResult, error) {
 	result := &VendorOperationResult{UpdatedModels: []int{}, DeletedVendors: []int{}}
+	var previousImages []string
 	err := metadataTransaction(func(tx *gorm.DB) error {
 		preview, err := buildVendorOperationPreview(lockForUpdate(tx), operation)
 		if err != nil {
@@ -232,6 +233,7 @@ func applyVendorOperation(operation VendorOperation) (*VendorOperationResult, er
 		}
 		if operation.Action == "merge" || operation.Action == "delete" {
 			for _, vendor := range preview.Sources {
+				previousImages = append(previousImages, vendor.Icon, vendor.Description)
 				result.DeletedVendors = append(result.DeletedVendors, vendor.Id)
 			}
 			if err := tx.Where("id IN ?", result.DeletedVendors).Delete(&Vendor{}).Error; err != nil {
@@ -244,5 +246,6 @@ func applyVendorOperation(operation VendorOperation) (*VendorOperationResult, er
 		return nil, err
 	}
 	RefreshPricing()
+	CleanupReplacedUploadedImages(previousImages...)
 	return result, nil
 }

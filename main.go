@@ -367,6 +367,14 @@ func InitResources() error {
 	}
 
 	service.StartAuthArtifactCleanup()
+	go func() {
+		for {
+			if _, err := model.SweepUnusedUploadedImages(); err != nil {
+				common.SysError(common.LogText("Uploaded image cleanup failed: %v", err))
+			}
+			time.Sleep(time.Hour)
+		}
+	}()
 	if _, err := model.QuarantineUnauthorizedRootUsers(); err != nil {
 		return err
 	}

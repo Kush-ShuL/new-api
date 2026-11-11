@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useMemo } from 'react'
+import { useMemo, type CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { StaticDataTable } from '@/components/data-table'
@@ -27,6 +27,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  updateTableScrollClip,
 } from '@/components/ui/table'
 import {
   getSuccessRateLevel,
@@ -81,8 +82,10 @@ export function AvailabilityTable(props: { data: AvailabilityData }) {
 
   return (
     <StaticDataTable
-      className='availability-table isolate min-h-0 flex-1 overflow-auto rounded-xl border-[0.5px]'
+      className='availability-table isolate min-h-0 flex-1 overflow-auto rounded-xl border-[0.5px] [--availability-model-width:12rem] sm:[--availability-model-width:15rem]'
       containerProps={{
+        'data-table-scroll-viewport': true,
+        onScroll: updateTableScrollClip,
         role: 'region',
         'aria-label': t('Hourly model availability'),
         tabIndex: 0,
@@ -90,8 +93,11 @@ export function AvailabilityTable(props: { data: AvailabilityData }) {
       tableProps={{
         withContainer: false,
         'aria-label': t('Hourly model availability'),
+        style: {
+          width: `calc(var(--availability-model-width) + ${hours.length} * 6rem)`,
+        },
       }}
-      tableClassName='w-max min-w-full border-separate border-spacing-0 [&_td]:border-r-[0.5px] [&_td]:border-b-[0.5px] [&_th]:border-r-[0.5px] [&_th]:border-b-[0.5px]'
+      tableClassName='table-fixed border-separate border-spacing-0 [&_td]:border-r-[0.5px] [&_td]:border-b-[0.5px] [&_th]:border-r-[0.5px] [&_th]:border-b-[0.5px]'
     >
       <TableHeader className='sticky top-0 z-20'>
         <TableRow className='hover:bg-transparent'>
@@ -101,11 +107,17 @@ export function AvailabilityTable(props: { data: AvailabilityData }) {
           >
             {t('Model')}
           </TableHead>
-          {hours.map((ts) => (
+          {hours.map((ts, columnIndex) => (
             <TableHead
               key={ts}
               scope='col'
-              className='bg-muted h-12 min-w-24 px-3 text-center'
+              data-availability-hour
+              className='bg-muted h-12 w-24 px-3 text-center'
+              style={
+                {
+                  '--availability-column-left': `${columnIndex * 6}rem`,
+                } as CSSProperties
+              }
               title={
                 ts === hours.at(-1)
                   ? t('Current hour is still in progress')
@@ -127,7 +139,7 @@ export function AvailabilityTable(props: { data: AvailabilityData }) {
             >
               <ModelIdentity name={row.name} icon={row.icon || row.name} />
             </TableHead>
-            {hours.map((ts) => {
+            {hours.map((ts, columnIndex) => {
               const point = row.points.get(ts)
               const hasData = point != null && point.request_count > 0
               const rate = hasData
@@ -142,6 +154,12 @@ export function AvailabilityTable(props: { data: AvailabilityData }) {
               return (
                 <TableCell
                   key={ts}
+                  data-availability-hour
+                  style={
+                    {
+                      '--availability-column-left': `${columnIndex * 6}rem`,
+                    } as CSSProperties
+                  }
                   data-availability-level={getSuccessRateLevel(rate)}
                   className={cn(
                     'h-14 px-3 py-2 text-center',

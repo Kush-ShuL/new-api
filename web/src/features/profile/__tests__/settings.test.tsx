@@ -21,8 +21,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
 import { ROLE } from '@/lib/roles'
+import { useAuthStore } from '@/stores/auth-store'
 
 import { updateUserSettings } from '../api'
+import { ProfileAvatarCard } from '../components/profile-avatar-card'
 import { NotificationTab } from '../components/tabs/notification-tab'
 import type { UserProfile } from '../types'
 
@@ -57,6 +59,41 @@ const settings = {
 }
 
 afterEach(() => vi.restoreAllMocks())
+
+it('uploads avatars through the user endpoint and saves only after confirmation', async () => {
+  const url = '/api/appearance/background/avatar.png'
+  const post = vi
+    .spyOn(api, 'post')
+    .mockResolvedValue({ data: { success: true, data: { url } } })
+  const put = vi.spyOn(api, 'put').mockResolvedValue({
+    data: { success: true, data: { ...profile, avatar_url: url } },
+  })
+  const onUpdate = vi.fn()
+  render(<ProfileAvatarCard profile={profile} onUpdate={onUpdate} />)
+  fireEvent.change(screen.getByLabelText('Upload avatar'), {
+    target: {
+      files: [new File(['avatar'], 'avatar.png', { type: 'image/png' })],
+    },
+  })
+  await waitFor(() =>
+    expect(post).toHaveBeenCalledWith(
+      '/api/user/self/avatar/image',
+      expect.any(FormData),
+      expect.any(Object)
+    )
+  )
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled()
+  )
+  expect(put).not.toHaveBeenCalled()
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+  await waitFor(() =>
+    expect(put).toHaveBeenCalledWith('/api/user/self/avatar', { url })
+  )
+  await waitFor(() => expect(onUpdate).toHaveBeenCalledOnce())
+  expect(useAuthStore.getState().auth.user?.avatar_url).toBe(url)
+  useAuthStore.setState(useAuthStore.getInitialState(), true)
+})
 
 /** The body a PUT sends over the wire: undefined fields are left out. */
 function sentBody(put: { mock: { calls: unknown[][] } }): unknown {
@@ -293,7 +330,11 @@ describe('notifications a user receives', () => {
     expect(threshold).toHaveValue(null)
     expect(threshold).toHaveAttribute('placeholder', '0.002')
     expect(
-      screen.getByText('Leave empty to use the site default ($0.002)')
+      screen.getByText(
+        (_text, element) =>
+          element?.tagName === 'P' &&
+          element.textContent === 'Leave empty to use the site default ($0.002)'
+      )
     ).toBeInTheDocument()
     await save(onUpdate)
     expect(sentBody(put)).toMatchObject({ quota_warning_threshold: 0 })
