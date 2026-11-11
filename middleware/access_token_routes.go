@@ -43,6 +43,7 @@ func accessTokenScopeRule(scope string) accessTokenRouteRule {
 var accessTokenRouteRules = map[string]accessTokenRouteRule{
 	// router/api-router.go: top level
 	"GET /api/models":                     accessTokenScopeRule("profile:read"),
+	"GET /api/model-availability":         accessTokenAnyRule,
 	"GET /api/status/test":                accessTokenScopeRule("log:read"),
 	"GET /api/pricing":                    accessTokenAnyRule,
 	"GET /api/perf-metrics/summary":       accessTokenAnyRule,
@@ -148,6 +149,7 @@ var accessTokenRouteRules = map[string]accessTokenRouteRule{
 	"GET /api/option/request_policy":                             accessTokenScopeRule("option:read"),
 	"PATCH /api/option/request_policy":                           accessTokenScopeRule("option:write"),
 	"PUT /api/option/":                                           accessTokenScopeRule("option:write"),
+	"POST /api/option/appearance/background":                     accessTokenScopeRule("option:write"),
 	"PUT /api/option/passkey/domains":                            accessTokenScopeRule("option:write"),
 	"GET /api/option/model_pricing":                              accessTokenScopeRule("option:read"),
 	"GET /api/option/model_pricing/issues":                       accessTokenScopeRule("option:read"),
@@ -271,6 +273,7 @@ var accessTokenRouteRules = map[string]accessTokenRouteRule{
 	"GET /api/vendors/search":               accessTokenScopeRule("model:read"),
 	"GET /api/vendors/:id":                  accessTokenScopeRule("model:read"),
 	"POST /api/vendors/":                    accessTokenScopeRule("model:write"),
+	"POST /api/vendors/icon":                accessTokenScopeRule("model:write"),
 	"PUT /api/vendors/":                     accessTokenScopeRule("model:write"),
 	"DELETE /api/vendors/:id":               accessTokenScopeRule("model:write"),
 	"GET /api/models/sync_upstream/preview": accessTokenScopeRule("model:read"),

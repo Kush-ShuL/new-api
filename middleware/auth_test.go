@@ -401,6 +401,12 @@ func TestUserAuthAppliesAccessTokenRouteRules(t *testing.T) {
 	require.NoError(t, model.DB.Model(admin).Update("role", common.RoleAdminUser).Error)
 	profile, _ := createMiddlewareScopedToken(t, admin.Id, 0, "profile:read")
 	channel, _ := createMiddlewareScopedToken(t, admin.Id, time.Now().Unix()+3600, "channel:read")
+	modelWrite, _ := createMiddlewareScopedToken(t, admin.Id, 0, "model:write")
+	adminOptionWrite, _ := createMiddlewareScopedToken(t, admin.Id, 0, "option:write")
+	root := createMiddlewarePATUser(t, "upload-root", "upload-root-legacy")
+	require.NoError(t, model.DB.Model(root).Update("role", common.RoleRootUser).Error)
+	rootOptionWrite, _ := createMiddlewareScopedToken(t, root.Id, 0, "option:write")
+	rootProfile, _ := createMiddlewareScopedToken(t, root.Id, 0, "profile:read")
 	expired, _ := createMiddlewareScopedToken(t, admin.Id, time.Now().Unix()-1, "profile:read")
 
 	ok := func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"id": c.GetInt("id")}) }
@@ -410,10 +416,13 @@ func TestUserAuthAppliesAccessTokenRouteRules(t *testing.T) {
 	router.GET("/api/undeclared", UserAuth(), ok)
 	router.GET("/api/channel/", AdminAuth(), RequirePermission(authz.ChannelRead), ok)
 	router.GET("/api/pricing", TryUserAuth(), ok)
+	router.GET("/api/model-availability", UserAuth(), ok)
+	router.POST("/api/option/appearance/background", RootAuth(), ok)
+	router.POST("/api/vendors/icon", AdminAuth(), ok)
 
 	for _, test := range []struct {
-		name, path, token, code, reason string
-		status                          int
+		name, path, token, code, reason, method string
+		status                                  int
 	}{
 		{name: "granted scope on a never expiring token", path: "/api/user/self", token: profile, status: http.StatusOK},
 		{name: "missing scope", path: "/api/user/self", token: channel, status: http.StatusForbidden, code: "ACCESS_TOKEN_SCOPE_DENIED", reason: "scope_denied"},
@@ -424,9 +433,22 @@ func TestUserAuthAppliesAccessTokenRouteRules(t *testing.T) {
 		{name: "expired token", path: "/api/user/self", token: expired, status: http.StatusUnauthorized, code: "ACCESS_TOKEN_EXPIRED", reason: "expired"},
 		{name: "legacy token before the deadline", path: "/api/user/self", token: legacy, status: http.StatusOK},
 		{name: "legacy token on a session route", path: "/api/user/access_tokens", token: legacy, status: http.StatusForbidden, code: "AUTH_SESSION_REQUIRED", reason: "session_required"},
+		{name: "availability with a valid user token", path: "/api/model-availability", token: profile, status: http.StatusOK},
+		{name: "root can upload a site image with option write", method: http.MethodPost, path: "/api/option/appearance/background", token: rootOptionWrite, status: http.StatusOK},
+		{name: "site upload requires option write", method: http.MethodPost, path: "/api/option/appearance/background", token: rootProfile, status: http.StatusForbidden, code: "ACCESS_TOKEN_SCOPE_DENIED", reason: "scope_denied"},
+		{name: "site upload still requires root", method: http.MethodPost, path: "/api/option/appearance/background", token: adminOptionWrite, status: http.StatusForbidden},
+		{name: "admin can upload a vendor icon with model write", method: http.MethodPost, path: "/api/vendors/icon", token: modelWrite, status: http.StatusOK},
+		{name: "vendor upload requires model write", method: http.MethodPost, path: "/api/vendors/icon", token: profile, status: http.StatusForbidden, code: "ACCESS_TOKEN_SCOPE_DENIED", reason: "scope_denied"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			response := middlewareBearerRequest(router, test.path, test.token)
+			method := test.method
+			if method == "" {
+				method = http.MethodGet
+			}
+			request := httptest.NewRequest(method, test.path, nil)
+			request.Header.Set("Authorization", "Bearer "+test.token)
+			response := httptest.NewRecorder()
+			router.ServeHTTP(response, request)
 			assert.Equal(t, test.status, response.Code, response.Body.String())
 			if test.code != "" {
 				assert.Contains(t, response.Body.String(), `"code":"`+test.code+`"`)
