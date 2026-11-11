@@ -27,10 +27,6 @@ function updateTableScrollClip(event: React.UIEvent<HTMLElement>) {
     '--table-scroll-top',
     `${event.currentTarget.scrollTop}px`
   )
-  event.currentTarget.style.setProperty(
-    '--table-scroll-left',
-    `${event.currentTarget.scrollLeft}px`
-  )
 }
 
 function Table({

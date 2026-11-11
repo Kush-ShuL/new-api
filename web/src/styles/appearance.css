@@ -158,17 +158,6 @@ html[data-glass-ui] [data-table-scroll-viewport] [data-slot='table-body'] {
   clip-path: inset(var(--table-scroll-top, 0px) 0 0);
 }
 
-html[data-glass-ui] .availability-table [data-availability-hour] {
-  clip-path: inset(
-    0 0 0
-      clamp(
-        0px,
-        calc(var(--table-scroll-left, 0px) - var(--availability-column-left)),
-        100%
-      )
-  );
-}
-
 html[data-glass-ui] [data-slot='table-head'][scope='row'].sticky {
   background-color: color-mix(
     in srgb,
@@ -230,6 +219,27 @@ html.dark[data-glass-ui] .availability-table {
   --availability-good: var(--color-emerald-950);
   --availability-warning: var(--color-yellow-950);
   --availability-critical: var(--color-red-950);
+}
+
+/* Let fixed cells sample the scrolling table beneath them. A blur on the
+   viewport or the whole header would isolate that backdrop from its children. */
+html[data-glass-ui] .availability-table,
+html[data-glass-ui] .availability-table [data-slot='table-header'] {
+  background-color: transparent;
+  backdrop-filter: none;
+}
+
+html[data-glass-ui]
+  .availability-table
+  [data-slot='table-header']
+  [data-slot='table-head'],
+html[data-glass-ui] .availability-table [data-slot='table-head'][scope='row'] {
+  background-color: color-mix(
+    in srgb,
+    var(--background) var(--glass-opacity, 85%),
+    transparent
+  );
+  backdrop-filter: blur(var(--glass-blur, 20px)) saturate(120%);
 }
 
 .availability-table [data-availability-level='excellent'] {

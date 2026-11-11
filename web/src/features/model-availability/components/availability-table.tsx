@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useMemo, type CSSProperties } from 'react'
+import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { StaticDataTable } from '@/components/data-table'
@@ -27,7 +27,6 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-  updateTableScrollClip,
 } from '@/components/ui/table'
 import {
   getSuccessRateLevel,
@@ -84,8 +83,6 @@ export function AvailabilityTable(props: { data: AvailabilityData }) {
     <StaticDataTable
       className='availability-table isolate min-h-0 flex-1 overflow-auto rounded-xl border-[0.5px] [--availability-model-width:calc(var(--spacing)*48)] sm:[--availability-model-width:calc(var(--spacing)*60)]'
       containerProps={{
-        'data-table-scroll-viewport': true,
-        onScroll: updateTableScrollClip,
         role: 'region',
         'aria-label': t('Hourly model availability'),
         tabIndex: 0,
@@ -107,17 +104,11 @@ export function AvailabilityTable(props: { data: AvailabilityData }) {
           >
             {t('Model')}
           </TableHead>
-          {hours.map((ts, columnIndex) => (
+          {hours.map((ts) => (
             <TableHead
               key={ts}
               scope='col'
-              data-availability-hour
               className='bg-muted h-12 w-24 px-3 text-center'
-              style={
-                {
-                  '--availability-column-left': `calc(${columnIndex * 24} * var(--spacing))`,
-                } as CSSProperties
-              }
               title={
                 ts === hours.at(-1)
                   ? t('Current hour is still in progress')
@@ -139,7 +130,7 @@ export function AvailabilityTable(props: { data: AvailabilityData }) {
             >
               <ModelIdentity name={row.name} icon={row.icon || row.name} />
             </TableHead>
-            {hours.map((ts, columnIndex) => {
+            {hours.map((ts) => {
               const point = row.points.get(ts)
               const hasData = point != null && point.request_count > 0
               const rate = hasData
@@ -154,12 +145,6 @@ export function AvailabilityTable(props: { data: AvailabilityData }) {
               return (
                 <TableCell
                   key={ts}
-                  data-availability-hour
-                  style={
-                    {
-                      '--availability-column-left': `calc(${columnIndex * 24} * var(--spacing))`,
-                    } as CSSProperties
-                  }
                   data-availability-level={getSuccessRateLevel(rate)}
                   className={cn(
                     'h-14 px-3 py-2 text-center',
