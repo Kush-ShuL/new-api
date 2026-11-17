@@ -1,10 +1,12 @@
 package controller
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -1819,8 +1821,18 @@ func TestImageTaskLogContentFollowsOptions(t *testing.T) {
 		})
 	}
 	c, _ := newImageProtocolTestContext("")
-	c.Request = httptest.NewRequest(http.MethodPost, "/v1/images/edits", nil)
-	service.BeginPluginImageTaskLog(c, nil, []byte(`{"prompt":"a cat","images":[{"image_url":"https://images.example/input.png"}]}`))
+	var body bytes.Buffer
+	form := multipart.NewWriter(&body)
+	require.NoError(t, form.WriteField("prompt", "a cat"))
+	require.NoError(t, form.WriteField("images", `[{"image_url":"https://images.example/input.png"}]`))
+	file, err := form.CreateFormFile("images[]", "input.png")
+	require.NoError(t, err)
+	_, err = io.WriteString(file, "\x89PNG\r\n\x1a\n")
+	require.NoError(t, err)
+	require.NoError(t, form.Close())
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/images/edits", &body)
+	c.Request.Header.Set("Content-Type", form.FormDataContentType())
+	service.BeginPluginImageTaskLog(c, map[string]any{"prompt": "a cat"}, nil)
 	started := time.Now()
 	task := model.Task{TaskID: "task_image_log", UserId: 71, Platform: "image-bridge", Status: model.TaskStatusSuccess}
 	service.AddImageTaskLog(c, &task, started)
@@ -1836,7 +1848,7 @@ func TestImageTaskLogContentFollowsOptions(t *testing.T) {
 	assert.Equal(t, "/v1/images/edits", stored.PrivateData.ImageLog.Endpoint)
 	assert.Equal(t, 42, stored.PrivateData.ImageLog.InputTokens)
 	assert.Equal(t, 21, stored.PrivateData.ImageLog.OutputTokens)
-	assert.JSONEq(t, `{"prompt":"a cat","input_images":["https://images.example/input.png"],"output_images":["https://images.example/output.png"]}`, string(stored.ImageLogContent))
+	assert.JSONEq(t, `{"prompt":"a cat","input_images":["https://images.example/input.png","data:image/png;base64,iVBORw0KGgo="],"output_images":["https://images.example/output.png"]}`, string(stored.ImageLogContent))
 	public, err := common.Marshal(stored)
 	require.NoError(t, err)
 	assert.NotContains(t, string(public), "images.example")

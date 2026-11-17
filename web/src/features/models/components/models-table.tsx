@@ -250,6 +250,7 @@ export function ModelsTable() {
       skeletonKeyPrefix='model-skeleton'
       applyHeaderSize
       pinnedColumns={[
+        { columnId: 'select', side: 'left', className: 'shadow-none' },
         { columnId: 'model_name', side: 'left' },
         { columnId: 'actions', side: 'right' },
       ]}

@@ -36,6 +36,10 @@ export function TableScrollArea(props: {
     if (!viewport || !frame || !table || !header) return
 
     const cells = [...header.querySelectorAll('th')]
+    const leftPins = cells.filter((cell) => cell.matches('.table-pin-left'))
+    const rightPins = cells
+      .filter((cell) => cell.matches('.table-pin-right'))
+      .reverse()
     const measure = () => {
       const frameStyle = getComputedStyle(frame)
       const radius = Math.max(
@@ -43,51 +47,59 @@ export function TableScrollArea(props: {
         Number.parseFloat(frameStyle.borderTopLeftRadius) -
           Number.parseFloat(frameStyle.borderLeftWidth)
       )
-      let leftWidth = 0
-      let rightWidth = 0
-      for (const cell of cells) {
-        const style = getComputedStyle(cell)
-        if (cell.classList.contains('sticky')) {
-          if (style.left !== 'auto') {
-            leftWidth = Math.max(
-              leftWidth,
-              cell.offsetWidth + Number.parseFloat(style.left)
-            )
-          }
-          if (style.right !== 'auto') {
-            rightWidth = Math.max(
-              rightWidth,
-              cell.offsetWidth + Number.parseFloat(style.right)
-            )
+      const offsets = new Map<string, number>()
+      const widths = [leftPins, rightPins].map((pins) => {
+        let width = 0
+        for (const cell of pins) {
+          const id = cell.dataset.columnId
+          if (!id || offsets.has(id)) continue
+          offsets.set(id, width)
+          width += cell.getBoundingClientRect().width
+        }
+        return width
+      })
+      const headerTop = header.offsetTop
+      const headerHeight = header.offsetHeight
+      const viewportWidth = viewport.clientWidth
+      const viewportHeight = viewport.clientHeight
+      const scrollbarWidth = viewport.offsetWidth - viewportWidth
+      const scrollbarHeight = viewport.offsetHeight - viewportHeight
+      const headerOffsets = cells.map(
+        (cell) => (cell.parentElement?.offsetTop ?? headerTop) - headerTop
+      )
+      if (leftPins.length > 1 || rightPins.length > 1) {
+        for (const cell of table.querySelectorAll<HTMLElement>(
+          '.table-pin-left, .table-pin-right'
+        )) {
+          const offset = offsets.get(cell.dataset.columnId ?? '') ?? 0
+          const value = `${offset}px`
+          if (cell.style.getPropertyValue('--table-pin-offset') !== value) {
+            cell.style.setProperty('--table-pin-offset', value)
           }
         }
+      }
+      for (const [index, cell] of cells.entries()) {
         cell.style.setProperty(
           '--table-header-top',
-          `${(cell.parentElement?.offsetTop ?? header.offsetTop) - header.offsetTop}px`
+          `${headerOffsets[index]}px`
         )
       }
-
-      viewport.style.setProperty(
-        '--table-viewport-width',
-        `${viewport.clientWidth}px`
-      )
+      const [leftWidth, rightWidth] = widths
+      viewport.style.setProperty('--table-viewport-width', `${viewportWidth}px`)
       viewport.style.setProperty(
         '--table-viewport-height',
-        `${viewport.clientHeight}px`
+        `${viewportHeight}px`
       )
       viewport.style.setProperty(
         '--table-scrollbar-width',
-        `${viewport.offsetWidth - viewport.clientWidth}px`
+        `${scrollbarWidth}px`
       )
       viewport.style.setProperty(
         '--table-scrollbar-height',
-        `${viewport.offsetHeight - viewport.clientHeight}px`
+        `${scrollbarHeight}px`
       )
       viewport.style.setProperty('--table-inner-radius', `${radius}px`)
-      viewport.style.setProperty(
-        '--table-header-height',
-        `${header.offsetHeight}px`
-      )
+      viewport.style.setProperty('--table-header-height', `${headerHeight}px`)
       viewport.style.setProperty('--table-left-width', `${leftWidth}px`)
       viewport.style.setProperty('--table-right-width', `${rightWidth}px`)
       viewport.toggleAttribute('data-pinned-left', leftWidth > 0)

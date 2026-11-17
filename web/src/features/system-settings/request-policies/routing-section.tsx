@@ -121,7 +121,7 @@ function RoutingPolicyEditor(props: { config: PolicyConfig }) {
   // inherit and the retry budget.
   return (
     <Form {...form}>
-      <div className='min-w-0 space-y-5'>
+      <div className='min-w-0 space-y-5 pb-4'>
         <SettingsPageFormActions
           onSave={submit}
           isSaving={mutation.isPending}

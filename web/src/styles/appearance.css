@@ -422,6 +422,7 @@ html[data-glass-ui] .table-scroll-area [data-slot='table-cell'].sticky {
     0px,
     calc(var(--radius-xl) - var(--availability-border-width, 1px))
   );
+  border-radius: var(--availability-corner-radius);
 }
 
 /* Keep glass surfaces separate from table text. Each surface clips its own

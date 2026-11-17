@@ -21,7 +21,7 @@ import (
 
 const imageTaskCaptureKey = "image_task_capture"
 const ImageRelayTaskPlatform = "image-relay"
-const maxImageTaskLogBytes = 12 << 20
+const maxImageTaskLogBytesPerDirection = 12 << 20
 const maxLoggedImagePrompt = 1024 << 10
 
 type ImageTaskContent struct {
@@ -31,13 +31,13 @@ type ImageTaskContent struct {
 }
 
 type imageTaskCapture struct {
-	body          ImageTaskContent
-	outputEnabled bool
-	remaining     int
-	inputTokens   int
-	outputTokens  int
-	quota         int
-	durable       bool
+	body            ImageTaskContent
+	outputEnabled   bool
+	outputRemaining int
+	inputTokens     int
+	outputTokens    int
+	quota           int
+	durable         bool
 }
 
 func imageTaskLogOption(key string) bool {
@@ -47,7 +47,7 @@ func imageTaskLogOption(key string) bool {
 }
 
 func BeginImageTaskLog(c *gin.Context, request *dto.ImageRequest) {
-	capture := &imageTaskCapture{outputEnabled: imageTaskLogOption("global.image_log_output"), remaining: maxImageTaskLogBytes}
+	capture := &imageTaskCapture{outputEnabled: imageTaskLogOption("global.image_log_output"), outputRemaining: maxImageTaskLogBytesPerDirection}
 	c.Set(imageTaskCaptureKey, capture)
 	if imageTaskLogOption("global.image_log_prompt") {
 		capture.body.Prompt = strings.ToValidUTF8(request.Prompt[:min(len(request.Prompt), maxLoggedImagePrompt)], "�")
@@ -55,6 +55,7 @@ func BeginImageTaskLog(c *gin.Context, request *dto.ImageRequest) {
 	if !imageTaskLogOption("global.image_log_input") {
 		return
 	}
+	remaining := maxImageTaskLogBytesPerDirection
 	appendImage := func(item ojson.Result) {
 		var value string
 		if item.Type == ojson.String {
@@ -67,24 +68,35 @@ func BeginImageTaskLog(c *gin.Context, request *dto.ImageRequest) {
 				}
 			}
 		}
-		capture.addImage(&capture.body.InputImages, value)
+		addLoggedImage(&capture.body.InputImages, &remaining, value)
 	}
-	for _, raw := range []common.RawMessage{request.Image, request.Images, request.Mask} {
-		result := ojson.ParseBytes(raw)
+	appendImages := func(result ojson.Result) {
 		if result.IsArray() {
-			result.ForEach(func(_, item ojson.Result) bool { appendImage(item); return capture.remaining > 0 })
+			result.ForEach(func(_, item ojson.Result) bool { appendImage(item); return remaining > 0 })
 		} else {
 			appendImage(result)
 		}
 	}
 	if strings.HasPrefix(c.ContentType(), "multipart/form-data") {
-		form, err := common.ParseMultipartFormReusable(c)
-		if err != nil {
-			return
+		form := c.Request.MultipartForm
+		if form == nil {
+			var err error
+			form, err = common.ParseMultipartFormReusable(c)
+			if err != nil {
+				return
+			}
+			defer form.RemoveAll()
 		}
-		for _, key := range []string{"image", "image[]", "mask"} {
+		for _, key := range []string{"image", "image[]", "images", "images[]", "mask"} {
+			for _, value := range form.Value[key] {
+				if strings.HasPrefix(value, "[") || strings.HasPrefix(value, "{") || strings.HasPrefix(value, `"`) {
+					appendImages(ojson.Parse(value))
+				} else {
+					addLoggedImage(&capture.body.InputImages, &remaining, value)
+				}
+			}
 			for _, file := range form.File[key] {
-				if file.Size > int64(capture.remaining/4*3) {
+				if file.Size > int64(remaining/4*3) || len(capture.body.InputImages) >= 32 {
 					continue
 				}
 				part, err := file.Open()
@@ -94,10 +106,14 @@ func BeginImageTaskLog(c *gin.Context, request *dto.ImageRequest) {
 				data, err := io.ReadAll(io.LimitReader(part, file.Size+1))
 				_ = part.Close()
 				if err == nil && int64(len(data)) == file.Size {
-					capture.addImage(&capture.body.InputImages, base64.StdEncoding.EncodeToString(data))
+					addLoggedImage(&capture.body.InputImages, &remaining, base64.StdEncoding.EncodeToString(data))
 				}
 			}
 		}
+		return
+	}
+	for _, raw := range []common.RawMessage{request.Image, request.Images, request.Mask} {
+		appendImages(ojson.ParseBytes(raw))
 	}
 }
 
@@ -115,8 +131,8 @@ func BeginPluginImageTaskLog(c *gin.Context, body any, raw common.RawMessage) {
 	BeginImageTaskLog(c, &request)
 }
 
-func (log *imageTaskCapture) addImage(target *[]string, value string) {
-	if value == "" || len(value) > log.remaining || len(*target) >= 32 {
+func addLoggedImage(target *[]string, remaining *int, value string) {
+	if value == "" || len(value) > *remaining || len(*target) >= 32 {
 		return
 	}
 	if strings.HasPrefix(value, "https://") || strings.HasPrefix(value, "http://") {
@@ -145,8 +161,8 @@ func (log *imageTaskCapture) addImage(target *[]string, value string) {
 			return
 		}
 	}
-	if len(value) <= log.remaining {
-		log.remaining -= len(value)
+	if len(value) <= *remaining {
+		*remaining -= len(value)
 		*target = append(*target, value)
 	}
 }
@@ -155,15 +171,15 @@ func (log *imageTaskCapture) addImage(target *[]string, value string) {
 // when the operator has disabled output logging.
 func CaptureImageTaskOutput(c *gin.Context, data []byte) {
 	log, ok := common.GetContextKeyType[*imageTaskCapture](c, imageTaskCaptureKey)
-	if !ok || !log.outputEnabled || log.remaining == 0 {
+	if !ok || !log.outputEnabled || log.outputRemaining == 0 {
 		return
 	}
 	root := ojson.ParseBytes(data)
 	appendImage := func(item ojson.Result) {
 		for _, field := range []string{"b64_json", "url"} {
-			if value := item.Get(field); value.Type == ojson.String && len(value.Raw) <= log.remaining+2 {
+			if value := item.Get(field); value.Type == ojson.String && len(value.Raw) <= log.outputRemaining+2 {
 				before := len(log.body.OutputImages)
-				log.addImage(&log.body.OutputImages, value.String())
+				addLoggedImage(&log.body.OutputImages, &log.outputRemaining, value.String())
 				if len(log.body.OutputImages) != before {
 					return
 				}
@@ -178,7 +194,7 @@ func CaptureImageTaskOutput(c *gin.Context, data []byte) {
 		if items.IsObject() {
 			appendImage(items)
 		} else if items.IsArray() {
-			items.ForEach(func(_, item ojson.Result) bool { appendImage(item); return log.remaining > 0 })
+			items.ForEach(func(_, item ojson.Result) bool { appendImage(item); return log.outputRemaining > 0 })
 		}
 	}
 }
