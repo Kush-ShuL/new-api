@@ -66,7 +66,7 @@ export function DataTableView<TData>(props: DataTableViewProps<TData>) {
       className={
         props.splitHeader
           ? cn(
-              'min-h-0 flex-1 overflow-auto',
+              'min-h-0 flex-1',
               props.splitHeaderScrollClassName,
               props.bodyContainerClassName
             )
@@ -95,16 +95,13 @@ export function DataTableView<TData>(props: DataTableViewProps<TData>) {
   return (
     <div
       data-slot='data-table-frame'
-      className={cn(
-        'isolate overflow-hidden rounded-lg border',
-        props.containerClassName
-      )}
+      className={cn('isolate rounded-lg', props.containerClassName)}
       {...props.containerProps}
     >
       {props.splitHeader ? (
         <div
           className={cn(
-            'flex h-full min-h-0 flex-col',
+            'flex h-full min-h-0 flex-col rounded-[inherit]',
             props.tableContainerClassName
           )}
         >

@@ -101,7 +101,7 @@ export function AvailabilityTable(props: { data: AvailabilityData }) {
 
   return (
     <ScrollArea
-      className='availability-frame isolate min-h-0 flex-1'
+      className='availability-frame scrollbars-outside isolate min-h-0 flex-1'
       horizontal
       viewportProps={{
         ref: viewportRef,

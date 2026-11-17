@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useLayoutEffect, useRef, type ReactNode } from 'react'
 
+import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
 
 export function TableScrollArea(props: {
@@ -29,12 +30,9 @@ export function TableScrollArea(props: {
 
   useLayoutEffect(() => {
     const viewport = viewportRef.current
-    const frame = viewport?.closest<HTMLElement>(
-      '[data-slot="data-table-frame"]'
-    )
     const table = viewport?.querySelector('table')
     const header = table?.tHead
-    if (!viewport || !frame || !table || !header) return
+    if (!viewport || !table || !header) return
 
     const cells = [...header.querySelectorAll('th')]
     const leftPins = cells.filter((cell) => cell.matches('.table-pin-left'))
@@ -42,7 +40,7 @@ export function TableScrollArea(props: {
       .filter((cell) => cell.matches('.table-pin-right'))
       .reverse()
     const measure = () => {
-      const frameStyle = getComputedStyle(frame)
+      const frameStyle = getComputedStyle(viewport)
       const radius = Math.max(
         0,
         Number.parseFloat(frameStyle.borderTopLeftRadius) -
@@ -64,8 +62,6 @@ export function TableScrollArea(props: {
       const viewportWidth = viewport.clientWidth
       const viewportHeight = viewport.clientHeight
       const glassHeight = Math.min(viewportHeight, table.offsetHeight)
-      const scrollbarWidth = viewport.offsetWidth - viewportWidth
-      const scrollbarHeight = viewport.offsetHeight - viewportHeight
       const headerOffsets = cells.map(
         (cell) => (cell.parentElement?.offsetTop ?? headerTop) - headerTop
       )
@@ -89,14 +85,6 @@ export function TableScrollArea(props: {
       const [leftWidth, rightWidth] = widths
       viewport.style.setProperty('--table-viewport-width', `${viewportWidth}px`)
       viewport.style.setProperty('--table-viewport-height', `${glassHeight}px`)
-      viewport.style.setProperty(
-        '--table-scrollbar-width',
-        `${scrollbarWidth}px`
-      )
-      viewport.style.setProperty(
-        '--table-scrollbar-height',
-        `${scrollbarHeight}px`
-      )
       viewport.style.setProperty('--table-inner-radius', `${radius}px`)
       viewport.style.setProperty('--table-header-height', `${headerHeight}px`)
       viewport.style.setProperty('--table-left-width', `${leftWidth}px`)
@@ -107,20 +95,25 @@ export function TableScrollArea(props: {
 
     measure()
     const observer = new ResizeObserver(measure)
-    for (const element of [viewport, frame, table, header, ...cells]) {
+    for (const element of [viewport, table, header, ...cells]) {
       observer.observe(element)
     }
     return () => observer.disconnect()
   }, [props.children])
 
   return (
-    <div
-      ref={viewportRef}
+    <ScrollArea
       data-table-state={props.state}
+      horizontal
       className={cn(
-        'table-scroll-area relative w-full overflow-auto',
+        'table-scroll-frame scrollbars-outside grid w-full min-w-0 grid-cols-1 grid-rows-[minmax(0,1fr)] rounded-[inherit]',
         props.className
       )}
+      viewportProps={{
+        ref: viewportRef,
+        className:
+          'table-scroll-area relative min-h-0 min-w-0 border focus-visible:ring-0 focus-visible:outline-none',
+      }}
     >
       <div className='relative min-h-full w-max min-w-full'>
         <div
@@ -145,6 +138,6 @@ export function TableScrollArea(props: {
         />
         {props.children}
       </div>
-    </div>
+    </ScrollArea>
   )
 }
