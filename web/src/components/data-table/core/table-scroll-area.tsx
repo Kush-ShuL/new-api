@@ -23,6 +23,7 @@ import { cn } from '@/lib/utils'
 export function TableScrollArea(props: {
   children: ReactNode
   className?: string
+  state: 'loading' | 'ready' | 'empty'
 }) {
   const viewportRef = useRef<HTMLDivElement>(null)
 
@@ -115,6 +116,7 @@ export function TableScrollArea(props: {
   return (
     <div
       ref={viewportRef}
+      data-table-state={props.state}
       className={cn(
         'table-scroll-area relative w-full overflow-auto',
         props.className

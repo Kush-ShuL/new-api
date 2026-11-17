@@ -91,6 +91,8 @@ export interface DataTableCardGridProps<TData> {
 
 const DEFAULT_GRID_CLASSNAME =
   'grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-3'
+const CARD_CLASSNAME =
+  'relative isolate min-w-0 overflow-hidden rounded-xl border-[0.5px] bg-(--data-table-card-bg,var(--table-row)) p-4'
 
 function CardGridSkeleton(props: {
   gridClassName?: string
@@ -102,7 +104,8 @@ function CardGridSkeleton(props: {
       {[1, 2, 3, 4, 5, 6].map((i) => (
         <div
           key={`${prefix}-${i}`}
-          className='space-y-3 rounded-lg border bg-(--table-row) p-3'
+          data-slot='data-table-card'
+          className={cn(CARD_CLASSNAME, 'space-y-3')}
         >
           <div className='flex items-center justify-between gap-2'>
             <Skeleton className='h-4 w-32' />
@@ -186,7 +189,8 @@ export function DataTableCardGrid<TData>(props: DataTableCardGridProps<TData>) {
             data-sortable-id={row.id}
             data-state={isSelected ? 'selected' : undefined}
             className={cn(
-              'relative isolate min-w-0 overflow-hidden rounded-xl border-[0.5px] bg-(--data-table-card-bg,var(--table-row)) p-4 transition-[background-color,border-color] duration-150 data-[state=selected]:[--data-table-card-bg:color-mix(in_oklch,var(--primary)_7%,var(--table-row))] data-[state=selected]:border-primary/40',
+              CARD_CLASSNAME,
+              'transition-[background-color,border-color] duration-150 data-[state=selected]:[--data-table-card-bg:color-mix(in_oklch,var(--primary)_7%,var(--table-row))] data-[state=selected]:border-primary/40',
               props.getRowClassName?.(row)
             )}
           >

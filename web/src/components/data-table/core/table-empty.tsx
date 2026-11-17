@@ -27,12 +27,14 @@ import {
   EmptyTitle,
 } from '@/components/ui/empty'
 import { TableRow, TableCell } from '@/components/ui/table'
+import { cn } from '@/lib/utils'
 
 interface TableEmptyProps {
   /**
    * Number of columns to span
    */
   colSpan: number
+  fillViewport?: boolean
   /**
    * Custom title for empty state
    * @default 'No Data'
@@ -60,6 +62,7 @@ interface TableEmptyProps {
  */
 export function TableEmpty({
   colSpan,
+  fillViewport,
   title,
   description,
   icon,
@@ -71,8 +74,11 @@ export function TableEmpty({
     description ?? t('No records found. Try adjusting your filters.')
   return (
     <TableRow>
-      <TableCell colSpan={colSpan} className='h-[400px] p-0'>
-        <Empty>
+      <TableCell
+        colSpan={colSpan}
+        className={cn('p-0', !fillViewport && 'h-[400px]')}
+      >
+        <Empty className='sticky left-0 w-[var(--table-viewport-width,100%)] whitespace-normal'>
           <EmptyHeader>
             <EmptyMedia variant='icon'>
               {icon || <Database className='size-6' />}

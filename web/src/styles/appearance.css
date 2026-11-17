@@ -304,9 +304,9 @@ html[data-glass-ui] [data-slot='static-data-table'] [data-slot='table-cell'] {
   margin-left: auto;
 }
 
-[data-pinned-left] > div > .table-scroll-left-glass,
+[data-table-state='ready'][data-pinned-left] > div > .table-scroll-left-glass,
 [data-pinned-left] > div > .table-scroll-left-corner-glass,
-[data-pinned-right] > div > .table-scroll-right-glass,
+[data-table-state='ready'][data-pinned-right] > div > .table-scroll-right-glass,
 [data-pinned-right] > div > .table-scroll-right-corner-glass {
   display: block;
 }
@@ -354,6 +354,34 @@ html[data-glass-ui] [data-slot='static-data-table'] [data-slot='table-cell'] {
 .table-scroll-area [data-slot='table'] {
   border-collapse: separate;
   border-spacing: 0;
+}
+
+/* An empty table has one surface reaching the frame, even when there are
+   no rows to fill the available page height. */
+.table-scroll-area[data-table-state='empty'] > div {
+  height: 100%;
+}
+
+.table-scroll-area[data-table-state='empty'] > div > table {
+  height: 100%;
+}
+
+html[data-glass-ui] .table-scroll-area[data-table-state='empty'] {
+  background-color: color-mix(
+    in srgb,
+    var(--background) var(--glass-opacity, 85%),
+    transparent
+  );
+}
+
+html[data-glass-ui]
+  .table-scroll-area[data-table-state='empty']
+  > div
+  > table
+  > tbody
+  > tr
+  > td {
+  background-color: transparent;
 }
 
 .table-scroll-area [data-slot='table-head'],
@@ -416,22 +444,25 @@ html[data-glass-ui] .table-scroll-area [data-slot='table-cell'].sticky {
   backdrop-filter: none;
 }
 
-.availability-table {
-  --availability-header-height: calc(var(--spacing) * 12);
-  --availability-corner-radius: max(
-    0px,
-    calc(var(--radius-xl) - var(--availability-border-width, 1px))
-  );
-  border-radius: var(--availability-corner-radius);
+.availability-frame[data-has-overflow-y] {
+  padding-inline-end: calc(var(--spacing) * 3);
 }
 
-/* Keep keyboard focus on the rounded frame, clear of the native scrollbars. */
-.availability-frame:has(> .availability-table:focus-visible) {
-  border-color: color-mix(in srgb, var(--ring) 50%, var(--border));
+.availability-frame[data-has-overflow-x] {
+  padding-bottom: calc(var(--spacing) * 3);
+}
+
+.availability-frame > [data-orientation='vertical'] {
+  height: auto;
+}
+
+.availability-table {
+  --availability-header-height: calc(var(--spacing) * 12);
+  --availability-corner-radius: calc(var(--radius-xl) - 0.5px);
 }
 
 .availability-table:focus-visible {
-  outline: none;
+  border-color: color-mix(in srgb, var(--ring) 50%, var(--border));
 }
 
 /* Keep glass surfaces separate from table text. Each surface clips its own
@@ -457,8 +488,8 @@ html[data-glass-ui] .table-scroll-area [data-slot='table-cell'].sticky {
   border-radius: var(--availability-corner-radius)
     var(--availability-corner-radius) 0 0;
   clip-path: inset(
-    0 calc(-1 * var(--availability-scrollbar-width)) 0 0 round
-      var(--availability-corner-radius) var(--availability-corner-radius) 0 0
+    0 round var(--availability-corner-radius) var(--availability-corner-radius)
+      0 0
   );
 }
 
@@ -473,10 +504,7 @@ html[data-glass-ui] .table-scroll-area [data-slot='table-cell'].sticky {
     var(--availability-header-height) - var(--availability-viewport-height)
   );
   border-radius: 0 0 0 var(--availability-corner-radius);
-  clip-path: inset(
-    0 0 calc(-1 * var(--availability-scrollbar-height)) 0 round 0 0 0
-      var(--availability-corner-radius)
-  );
+  clip-path: inset(0 round 0 0 0 var(--availability-corner-radius));
 }
 
 .availability-corner-glass {

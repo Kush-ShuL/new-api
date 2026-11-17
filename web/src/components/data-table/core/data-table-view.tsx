@@ -59,50 +59,21 @@ export function DataTableView<TData>(props: DataTableViewProps<TData>) {
     props.getColumnClassName,
     props.pinnedColumns
   )
-
-  return (
-    <div
-      data-slot='data-table-frame'
-      className={cn(
-        'isolate overflow-hidden rounded-lg border',
-        props.containerClassName
-      )}
-      {...props.containerProps}
-    >
-      {props.splitHeader ? (
-        <SplitHeaderTableView
-          props={props}
-          rows={rows}
-          colSpan={colSpan}
-          getColumnClassName={columnClassName}
-        />
-      ) : (
-        <UnifiedTableView
-          props={props}
-          rows={rows}
-          colSpan={colSpan}
-          getColumnClassName={columnClassName}
-        />
-      )}
-    </div>
-  )
-}
-
-function UnifiedTableView<TData>({
-  props,
-  rows,
-  colSpan,
-  getColumnClassName,
-}: {
-  props: DataTableViewProps<TData>
-  rows: Row<TData>[]
-  colSpan: number
-  getColumnClassName: DataTableColumnClassName
-}) {
   const tableSizing = getTableSizing(props)
-
-  return (
-    <TableScrollArea className={props.tableContainerClassName}>
+  const rowsState = rows.length === 0 ? 'empty' : 'ready'
+  const scrollArea = (
+    <TableScrollArea
+      className={
+        props.splitHeader
+          ? cn(
+              'min-h-0 flex-1 overflow-auto',
+              props.splitHeaderScrollClassName,
+              props.bodyContainerClassName
+            )
+          : props.tableContainerClassName
+      }
+      state={props.isLoading ? 'loading' : rowsState}
+    >
       <Table
         withContainer={false}
         className={props.tableClassName}
@@ -114,57 +85,34 @@ function UnifiedTableView<TData>({
           applyHeaderSize={props.applyHeaderSize}
           className={props.tableHeaderClassName}
           rowClassName={props.tableHeaderRowClassName}
-          getColumnClassName={getColumnClassName}
+          getColumnClassName={columnClassName}
         />
-        {renderTableBody(props, rows, colSpan, getColumnClassName)}
+        {renderTableBody(props, rows, colSpan, columnClassName)}
       </Table>
     </TableScrollArea>
   )
-}
-
-function SplitHeaderTableView<TData>({
-  props,
-  rows,
-  colSpan,
-  getColumnClassName,
-}: {
-  props: DataTableViewProps<TData>
-  rows: Row<TData>[]
-  colSpan: number
-  getColumnClassName: DataTableColumnClassName
-}) {
-  const tableSizing = getTableSizing(props)
 
   return (
     <div
+      data-slot='data-table-frame'
       className={cn(
-        'flex h-full min-h-0 flex-col',
-        props.tableContainerClassName
+        'isolate overflow-hidden rounded-lg border',
+        props.containerClassName
       )}
+      {...props.containerProps}
     >
-      <TableScrollArea
-        className={cn(
-          'min-h-0 flex-1 overflow-auto',
-          props.splitHeaderScrollClassName,
-          props.bodyContainerClassName
-        )}
-      >
-        <Table
-          withContainer={false}
-          className={props.tableClassName}
-          style={tableSizing.style}
+      {props.splitHeader ? (
+        <div
+          className={cn(
+            'flex h-full min-h-0 flex-col',
+            props.tableContainerClassName
+          )}
         >
-          {tableSizing.colgroup}
-          <DataTableHeader
-            table={props.table}
-            applyHeaderSize={props.applyHeaderSize}
-            className={props.tableHeaderClassName}
-            rowClassName={props.tableHeaderRowClassName}
-            getColumnClassName={getColumnClassName}
-          />
-          {renderTableBody(props, rows, colSpan, getColumnClassName)}
-        </Table>
-      </TableScrollArea>
+          {scrollArea}
+        </div>
+      ) : (
+        scrollArea
+      )}
     </div>
   )
 }
@@ -306,6 +254,7 @@ function renderEmptyState<TData>(
   return (
     <TableEmpty
       colSpan={colSpan}
+      fillViewport={props.splitHeader}
       title={props.emptyTitle}
       description={props.emptyDescription}
       icon={props.emptyIcon}
