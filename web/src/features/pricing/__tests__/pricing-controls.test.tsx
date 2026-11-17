@@ -165,9 +165,10 @@ describe('pricing controls', () => {
     expect(
       screen.getByRole('button', { name: 'Input: Image' })
     ).toHaveAttribute('aria-pressed', 'true')
-    await user.click(screen.getByRole('button', { name: 'Output: Audio' }))
+    expect(screen.queryByRole('button', { name: 'Input: Decision' })).toBeNull()
+    await user.click(screen.getByRole('button', { name: 'Output: Decision' }))
     expect(props.onCapabilityFiltersChange).toHaveBeenLastCalledWith({
-      outputModalities: ['text', 'audio'],
+      outputModalities: ['text', 'decision'],
     })
     await user.click(inputText)
     expect(props.onCapabilityFiltersChange).toHaveBeenLastCalledWith({

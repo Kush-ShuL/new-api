@@ -176,18 +176,16 @@ function ModalityFilter(props: {
       ? MODEL_INPUT_MODALITY_OPTIONS
       : MODEL_MODALITY_OPTIONS
   return (
-    <div className='border-border/70 space-y-2 border-b py-3'>
-      <p className='text-sm font-semibold'>{props.title}</p>
+    <div className='space-y-1'>
+      <p className='text-muted-foreground text-xs font-medium'>{props.title}</p>
       <ToggleGroup
         multiple
         value={props.value}
         onValueChange={props.onChange}
         aria-label={props.title}
+        size='sm'
         spacing={1}
-        className={cn(
-          'grid w-full min-w-0 gap-0.5',
-          props.direction === 'input' ? 'grid-cols-5' : 'grid-cols-6'
-        )}
+        className='grid w-full max-w-70 min-w-0 grid-cols-7 gap-1'
       >
         {options.map((modality) => (
           <Tooltip key={modality.value}>
@@ -196,7 +194,7 @@ function ModalityFilter(props: {
                 <ToggleGroupItem
                   value={modality.value}
                   aria-label={`${props.title}: ${t(modality.label)}`}
-                  className='h-7 w-full min-w-0 rounded-md p-0'
+                  className='text-muted-foreground data-[state=on]:bg-primary/12 data-[state=on]:text-primary w-full min-w-0 rounded-md p-0'
                 />
               }
             >
@@ -395,22 +393,24 @@ export const PricingSidebar = memo(function PricingSidebar(
             props.onCapabilityFiltersChange({ modelType })
           }
         />
-        <ModalityFilter
-          direction='input'
-          title={t('Input')}
-          value={props.capabilityFilters.inputModalities}
-          onChange={(inputModalities) =>
-            props.onCapabilityFiltersChange({ inputModalities })
-          }
-        />
-        <ModalityFilter
-          direction='output'
-          title={t('Output')}
-          value={props.capabilityFilters.outputModalities}
-          onChange={(outputModalities) =>
-            props.onCapabilityFiltersChange({ outputModalities })
-          }
-        />
+        <div className='border-border/70 space-y-2.5 border-b py-3'>
+          <ModalityFilter
+            direction='input'
+            title={t('Input')}
+            value={props.capabilityFilters.inputModalities}
+            onChange={(inputModalities) =>
+              props.onCapabilityFiltersChange({ inputModalities })
+            }
+          />
+          <ModalityFilter
+            direction='output'
+            title={t('Output')}
+            value={props.capabilityFilters.outputModalities}
+            onChange={(outputModalities) =>
+              props.onCapabilityFiltersChange({ outputModalities })
+            }
+          />
+        </div>
         <FilterSection
           title={t('Context length')}
           value={String(props.capabilityFilters.minContext)}
