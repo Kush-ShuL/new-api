@@ -3704,14 +3704,14 @@ test.each([true, false])(
     }
 
     await user.click(requestTab)
-    const websocket = screen.queryByRole('combobox', {
-      name: 'Responses WebSocket mode',
+    const websocket = screen.queryByRole('radio', {
+      name: 'Passthrough',
     })
     const passthrough = screen.queryByRole('group', {
       name: 'Field passthrough controls',
     })
     if (relays) {
-      expect(websocket).toHaveTextContent('Passthrough')
+      expect(websocket).toBeChecked()
       expect(passthrough).toBeVisible()
     } else {
       expect(websocket).not.toBeInTheDocument()
