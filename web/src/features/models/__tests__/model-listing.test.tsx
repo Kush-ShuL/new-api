@@ -224,9 +224,7 @@ it('lists explicitly created models and distinguishes catalog policy from availa
   expect(screen.queryByText('Missing metadata')).not.toBeInTheDocument()
   expect(screen.getByText('Channels 0 · Groups 0')).toBeVisible()
   expect(screen.getByRole('checkbox', { name: 'Select all' })).toBeVisible()
-  expect(
-    screen.getByRole('button', { name: 'Delete', exact: true })
-  ).toBeVisible()
+  expect(screen.getByRole('button', { name: /^Delete$/ })).toBeVisible()
   expect(
     screen.queryByText(
       'No channel is configured. This model will not appear in the model square.'
