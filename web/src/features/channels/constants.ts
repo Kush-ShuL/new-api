@@ -102,6 +102,7 @@ export const CHANNEL_TYPES = {
   62: 'vLLM',
   63: 'SGLang',
   64: 'Aggregate',
+  65: 'TypeSafe',
 } as const
 
 export type ChannelProviderPresentation = {
@@ -189,13 +190,14 @@ export const CHANNEL_PROVIDER_PRESENTATION: Partial<
     descriptionKey:
       'Share one API key and model list across multiple native protocols',
   },
+  65: { descriptionKey: 'Connect to Jev decision models' },
 } satisfies Record<
   Exclude<keyof typeof CHANNEL_TYPES, 0 | typeof CHANNEL_TYPE_TASK_PLUGIN>,
   ChannelProviderPresentation
 >
 
 const CHANNEL_TYPE_DISPLAY_ORDER: number[] = [
-  1, 64, 14, 24, 33, 43, 3, 41, 17, 45, 25, 26, 23, 48, 60, 58, 59, 61, 42, 34,
+  1, 64, 65, 14, 24, 33, 43, 3, 41, 17, 45, 25, 26, 23, 48, 60, 58, 59, 61, 42, 34,
   20, 4, 62, 40, 27, 15, 46, 18, 31, 35, 49, 19, 47, 37, 38, 39, 11, 8, 57, 22,
   21, 44, 2, 5, 36, 50, 51, 52, 53, 54, 55, 56,
 ]
@@ -537,6 +539,8 @@ export const MODEL_FETCHABLE_TYPES = new Set([
   CHANNEL_TYPE_SGLANG,
 ])
 
+// A plugin channel relays the formats its plugin's routes serve, so it takes
+// every field control, as an Advanced Custom channel does.
 export const FIELD_PASSTHROUGH_TYPES = new Set([
   CHANNEL_TYPE_AGGREGATE,
   1,
@@ -545,6 +549,7 @@ export const FIELD_PASSTHROUGH_TYPES = new Set([
   58,
   59,
   CHANNEL_TYPE_NEW_API,
+  CHANNEL_TYPE_TASK_PLUGIN,
   CHANNEL_TYPE_VLLM,
   CHANNEL_TYPE_SGLANG,
 ])
@@ -556,6 +561,7 @@ export const OPENAI_FIELD_PASSTHROUGH_TYPES = new Set([
   58,
   59,
   CHANNEL_TYPE_NEW_API,
+  CHANNEL_TYPE_TASK_PLUGIN,
   CHANNEL_TYPE_VLLM,
   CHANNEL_TYPE_SGLANG,
 ])
@@ -566,6 +572,7 @@ export const CLAUDE_FIELD_PASSTHROUGH_TYPES = new Set([
   58,
   59,
   CHANNEL_TYPE_NEW_API,
+  CHANNEL_TYPE_TASK_PLUGIN,
   CHANNEL_TYPE_VLLM,
   CHANNEL_TYPE_SGLANG,
 ])

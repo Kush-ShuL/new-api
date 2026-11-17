@@ -1,11 +1,11 @@
 package model_setting
 
 import (
-	"regexp"
 	"slices"
 	"strings"
 	"sync"
 
+	"github.com/MoeForge/moego/regexp"
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/setting/config"
 )
@@ -41,6 +41,9 @@ type ResponsesSummaryModel struct {
 }
 
 type GlobalSettings struct {
+	ImageLogPrompt                  bool `json:"image_log_prompt"`
+	ImageLogInput                   bool `json:"image_log_input"`
+	ImageLogOutput                  bool `json:"image_log_output"`
 	ResponsesReasoningEncryption    bool                             `json:"responses_reasoning_encryption"`
 	ResponsesReasoningSummaryMode   string                           `json:"responses_reasoning_summary_mode"`
 	ResponsesReasoningSummaryModels map[string]ResponsesSummaryModel `json:"responses_reasoning_summary_models"`

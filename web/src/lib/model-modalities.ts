@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import {
   AudioLines,
   File,
+  ListChecks,
   Image,
   Type,
   VectorSquare,
@@ -32,8 +33,9 @@ export const MODEL_MODALITY_OPTIONS = [
   { value: 'video', label: 'Video', icon: Video },
   { value: 'file', label: 'File', icon: File },
   { value: 'embedding', label: 'Embeddings', icon: VectorSquare },
+  { value: 'decision', label: 'Decision', icon: ListChecks },
 ] as const
 
 export const MODEL_INPUT_MODALITY_OPTIONS = MODEL_MODALITY_OPTIONS.filter(
-  (modality) => modality.value !== 'embedding'
+  (modality) => modality.value !== 'embedding' && modality.value !== 'decision'
 )

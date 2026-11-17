@@ -18,15 +18,22 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { Shield01Icon, Wrench01Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
+import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 
 import { Dialog } from '@/components/dialog'
 import { StatusBadge } from '@/components/status-badge'
 import { Label } from '@/components/ui/label'
-import { formatLogQuota, formatTimestampToDate } from '@/lib/format'
+import { toIntlLocale } from '@/i18n/languages'
+import {
+  formatLogQuota,
+  formatNumber,
+  formatTimestampToDate,
+} from '@/lib/format'
 import { translateServerText } from '@/lib/server-error-message'
 import { cn } from '@/lib/utils'
 
+import { getTaskArtifacts } from '../../api'
 import { taskActionMapper, taskStatusMapper } from '../../lib/mappers'
 import { resolveTaskDetailAccess } from '../../lib/task-details'
 import type { TaskLog } from '../../types'
@@ -63,7 +70,7 @@ function DetailSection(props: {
         {props.icon}
         {props.label}
       </Label>
-      <div className='bg-muted/30 min-w-0 space-y-1.5 rounded-md border p-2.5'>
+      <div className='bg-muted/30 min-w-0 space-y-1.5 overflow-hidden rounded-lg border p-2.5'>
         {props.children}
       </div>
     </section>
@@ -83,11 +90,22 @@ interface TaskDetailsDialogProps {
 }
 
 export function TaskDetailsDialog(props: TaskDetailsDialogProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const access = resolveTaskDetailAccess(props.log, props.isAdmin, props.isRoot)
   const plugin = access.plugin
   const runtime = access.runtime
   const properties = props.log.properties
+  const imageLog = props.log.image_log
+  const imageQuery = useQuery({
+    queryKey: ['usage-logs', 'image-task-content', props.log.task_id],
+    queryFn: () => getTaskArtifacts(props.log.task_id),
+    enabled: props.open && !!imageLog?.has_content,
+    retry: false,
+    gcTime: 0,
+  })
+  const imageContent = imageQuery.data?.imageLogContent
+  const number = (value: number) =>
+    formatNumber(value, toIntlLocale(i18n.language))
 
   return (
     <Dialog
@@ -163,6 +181,82 @@ export function TaskDetailsDialog(props: TaskDetailsDialogProps) {
             />
           ) : null}
         </DetailSection>
+
+        {imageLog ? (
+          <DetailSection label={t('Image Task Logging')}>
+            <DetailRow label={t('Endpoint')} value={imageLog.endpoint} />
+            <DetailRow
+              label={t('Latency')}
+              value={`${number(imageLog.duration_ms)} ms`}
+            />
+            <DetailRow
+              label={t('Input Tokens')}
+              value={number(imageLog.input_tokens)}
+            />
+            <DetailRow
+              label={t('Output Tokens')}
+              value={number(imageLog.output_tokens)}
+            />
+            {props.isAdmin && imageLog.ip ? (
+              <DetailRow label={t('IP Address')} value={imageLog.ip} />
+            ) : null}
+            {imageContent?.prompt ? (
+              <DetailRow
+                label={t('Prompt')}
+                value={
+                  <span className='whitespace-pre-wrap'>
+                    {imageContent.prompt}
+                  </span>
+                }
+              />
+            ) : null}
+            {(
+              [
+                [t('Input Images'), imageContent?.inputImages],
+                [t('Output Images'), imageContent?.outputImages],
+              ] as const
+            ).map(([label, images]) => {
+              const safeImages = images?.filter((url) =>
+                /^(?:https?:\/\/|data:image\/(?:png|jpeg|webp|gif);base64,)/i.test(
+                  url
+                )
+              )
+              return safeImages?.length ? (
+                <div key={label} className='space-y-1.5 pt-2'>
+                  <span className='text-muted-foreground text-xs'>{label}</span>
+                  <div className='grid grid-cols-2 gap-2 sm:grid-cols-3'>
+                    {safeImages.map((url, index) =>
+                      url.startsWith('data:') ? (
+                        <img
+                          key={index}
+                          src={url}
+                          alt={label}
+                          loading='lazy'
+                          className='max-h-48 w-full rounded-md object-contain'
+                        />
+                      ) : (
+                        <a
+                          key={index}
+                          href={url}
+                          target='_blank'
+                          rel='noopener noreferrer'
+                          className='text-primary text-xs underline underline-offset-2'
+                        >
+                          {t('Open image')} {number(index + 1)}
+                        </a>
+                      )
+                    )}
+                  </div>
+                </div>
+              ) : null
+            })}
+            {imageQuery.isError ? (
+              <div className='text-muted-foreground text-xs'>
+                {t('Failed to load image log content')}
+              </div>
+            ) : null}
+          </DetailSection>
+        ) : null}
 
         {props.isAdmin ? (
           <DetailSection

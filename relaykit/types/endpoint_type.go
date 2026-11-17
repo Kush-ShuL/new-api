@@ -10,6 +10,8 @@ const (
 	EndpointTypeOpenAIResponse        EndpointType = "openai-response"
 	EndpointTypeOpenAIResponseCompact EndpointType = "openai-response-compact"
 	EndpointTypeOpenAIAlphaSearch     EndpointType = "openai-alpha-search"
+	EndpointTypeOpenAIDecisions       EndpointType = "openai-decisions"
+	EndpointTypeSystemOne             EndpointType = "systemone"
 	EndpointTypeDeepSeekToolsSearch   EndpointType = "deepseek-tools-search"
 	EndpointTypeDeepSeekToolsFetch    EndpointType = "deepseek-tools-fetch"
 	EndpointTypeAnthropic             EndpointType = "anthropic"

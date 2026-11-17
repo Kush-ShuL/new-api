@@ -23,6 +23,7 @@ import { ClaudeSettingsCard } from './claude-settings-card'
 import { GeminiSettingsCard } from './gemini-settings-card'
 import { GlobalSettingsCard } from './global-settings-card'
 import { GrokSettingsCard } from './grok-settings-card'
+import { ImageTaskLoggingSettings } from './image-task-logging-settings'
 import { responsesSummaryModelsSchema } from './responses-summary-schema'
 
 function formatJsonForEditor(value: string, fallback: string) {
@@ -36,6 +37,11 @@ function formatJsonForEditor(value: string, fallback: string) {
 }
 
 const MODELS_SECTIONS = [
+  {
+    id: 'image-task-logging',
+    titleKey: 'Image Task Logging',
+    build: (settings: ModelSettings) => <ImageTaskLoggingSettings settings={settings} />,
+  },
   {
     id: 'global',
     titleKey: 'Global Model Configuration',

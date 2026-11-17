@@ -210,6 +210,7 @@ export const channelFormSchema = z
     base_url: z.string().optional(),
     task_plugin_key: z.string().optional(),
     task_extend_plugin_keys: z.array(z.string()).optional(),
+    request_plugins: z.array(z.string()).optional(),
     key: z.string(),
     openai_organization: z.string().optional(),
     models: z.string().min(1, ERROR_MESSAGES.REQUIRED_MODELS),
@@ -304,6 +305,13 @@ export const channelFormSchema = z
     upstream_model_update_check_enabled: z.boolean().optional(),
     upstream_model_update_auto_sync_enabled: z.boolean().optional(),
     upstream_model_update_ignored_models: z.string().optional(),
+    // The bound plugin's channel settings (type 61, stored in settings JSON)
+    plugin_config: z.record(z.string(), z.unknown()).optional(),
+    // Their values as typed, null until edited (not sent to backend)
+    plugin_config_draft: z
+      .record(z.string(), z.unknown())
+      .nullable()
+      .optional(),
   })
   .superRefine((data, ctx) => {
     if (data.type === CHANNEL_TYPE_AGGREGATE) {
@@ -482,6 +490,7 @@ export const CHANNEL_FORM_DEFAULT_VALUES: ChannelFormValues = {
   base_url: '',
   task_plugin_key: '',
   task_extend_plugin_keys: [],
+  request_plugins: [],
   key: '',
   openai_organization: '',
   models: '',
@@ -542,6 +551,8 @@ export const CHANNEL_FORM_DEFAULT_VALUES: ChannelFormValues = {
   aggregate_responses_path: '/v1/responses',
   aggregate_models_path: '/v1/models',
   aggregate_websocket: false,
+  plugin_config: {},
+  plugin_config_draft: null,
 }
 
 // ============================================================================
@@ -558,6 +569,7 @@ export function transformChannelToFormDefaults(
   let extraSettings = {
     task_plugin_key: '',
     task_extend_plugin_keys: [] as string[],
+    request_plugins: [] as string[],
     force_format: false,
     thinking_to_content: false,
     proxy: '',
@@ -583,6 +595,11 @@ export function transformChannelToFormDefaults(
       extraSettings = {
         task_plugin_key: parsed.task_plugin_key || '',
         task_extend_plugin_keys: readTaskExtendPluginKeys(channel.type, parsed),
+        request_plugins: Array.isArray(parsed.request_plugins)
+          ? parsed.request_plugins.filter(
+              (id: unknown): id is string => typeof id === 'string'
+            )
+          : [],
         force_format: parsed.force_format || false,
         thinking_to_content: parsed.thinking_to_content || false,
         proxy: parsed.proxy || '',
@@ -591,7 +608,11 @@ export function transformChannelToFormDefaults(
         tls_insecure_skip_verify: parsed.tls_insecure_skip_verify === true,
         pass_through_body_enabled: parsed.pass_through_body_enabled || false,
         responses_websocket_mode:
-          parsed.responses_websocket_mode || 'http_bridge',
+          parsed.responses_websocket_mode ||
+          (channel.type === CHANNEL_TYPE_TASK_PLUGIN &&
+          parsed.responses_websocket_enabled === true
+            ? 'passthrough'
+            : 'http_bridge'),
         system_prompt: parsed.system_prompt || '',
         system_prompt_override: parsed.system_prompt_override || false,
       }
@@ -629,6 +650,7 @@ export function transformChannelToFormDefaults(
     models_path?: string
     websocket?: boolean
   } = {}
+  let pluginConfig: Record<string, unknown> = {}
 
   if (channel.settings) {
     try {
@@ -662,6 +684,9 @@ export function transformChannelToFormDefaults(
         : ''
       if (parsed.advanced_custom) {
         advancedCustom = stringifyAdvancedCustomConfig(parsed.advanced_custom)
+      }
+      if (isJsonObjectValue(parsed.plugin_config)) {
+        pluginConfig = parsed.plugin_config
       }
     } catch (error) {
       // eslint-disable-next-line no-console
@@ -723,6 +748,8 @@ export function transformChannelToFormDefaults(
     aggregate_responses_path: aggregate.responses_path || '',
     aggregate_models_path: aggregate.models_path || '',
     aggregate_websocket: aggregate.websocket === true,
+    plugin_config: pluginConfig,
+    plugin_config_draft: null,
   }
 }
 
@@ -740,13 +767,18 @@ export function buildSettingJSON(formData: ChannelFormValues): string {
       formData.task_extend_plugin_keys?.length
         ? formData.task_extend_plugin_keys
         : undefined,
+    request_plugins: formData.request_plugins?.length
+      ? formData.request_plugins
+      : undefined,
     force_format: formData.force_format || false,
     thinking_to_content: formData.thinking_to_content || false,
     proxy: formData.proxy?.trim() || '',
     pass_through_body_enabled: formData.pass_through_body_enabled === true,
-    responses_websocket_mode: supportsResponsesWebSocket(formData.type)
-      ? formData.responses_websocket_mode || 'http_bridge'
-      : undefined,
+    responses_websocket_mode:
+      supportsResponsesWebSocket(formData.type) ||
+      formData.type === CHANNEL_TYPE_TASK_PLUGIN
+        ? formData.responses_websocket_mode || 'http_bridge'
+        : undefined,
     system_prompt: formData.system_prompt || '',
     system_prompt_override: formData.system_prompt_override || false,
   }
@@ -885,8 +917,12 @@ function buildSettingsJSON(formData: ChannelFormValues): string {
   settingsObj.disable_task_polling_sleep =
     formData.disable_task_polling_sleep === true
 
-  // Upstream model update settings (for model-fetchable channel types)
-  if (MODEL_FETCHABLE_TYPES.has(formData.type)) {
+  // Upstream model update settings (for model-fetchable channel types; a
+  // plugin channel shows them when its plugin can list models)
+  if (
+    MODEL_FETCHABLE_TYPES.has(formData.type) ||
+    formData.type === CHANNEL_TYPE_TASK_PLUGIN
+  ) {
     settingsObj.upstream_model_update_check_enabled =
       formData.upstream_model_update_check_enabled === true
     settingsObj.upstream_model_update_auto_sync_enabled =
@@ -926,6 +962,16 @@ function buildSettingsJSON(formData: ChannelFormValues): string {
     }
   } else if ('advanced_custom' in settingsObj) {
     delete settingsObj.advanced_custom
+  }
+
+  // Only set values are kept; the plugin's defaults apply to the rest.
+  if (
+    formData.type === CHANNEL_TYPE_TASK_PLUGIN &&
+    Object.keys(formData.plugin_config ?? {}).length > 0
+  ) {
+    settingsObj.plugin_config = formData.plugin_config
+  } else {
+    delete settingsObj.plugin_config
   }
 
   return JSON.stringify(settingsObj)

@@ -13,6 +13,8 @@ func GetEndpointTypesByChannelType(channelType int, modelName string) []constant
 	}
 	var endpointTypes []constant.EndpointType
 	switch channelType {
+	case constant.ChannelTypeTypeSafe:
+		return []constant.EndpointType{constant.EndpointTypeSystemOne, constant.EndpointTypeOpenAIDecisions}
 	case constant.ChannelTypeJina:
 		endpointTypes = []constant.EndpointType{constant.EndpointTypeJinaRerank}
 	//case constant.ChannelTypeMidjourney, constant.ChannelTypeMidjourneyPlus:
@@ -61,9 +63,15 @@ func GetEndpointTypesByChannelType(channelType int, modelName string) []constant
 			endpointTypes = []constant.EndpointType{constant.EndpointTypeOpenAI}
 		}
 	}
+	if IsJevDecisionModel(modelName) && DecisionUpstreamPath(channelType, SystemOnePath) != "" {
+		return []constant.EndpointType{constant.EndpointTypeSystemOne, constant.EndpointTypeOpenAIDecisions}
+	}
 	if IsImageGenerationModel(modelName) {
 		// add to first
 		endpointTypes = append([]constant.EndpointType{constant.EndpointTypeImageGeneration}, endpointTypes...)
+	}
+	if modelName == "gpt-6-luna" && channelType == constant.ChannelTypeOpenAI {
+		endpointTypes = append(endpointTypes, constant.EndpointTypeOpenAIDecisions, constant.EndpointTypeSystemOne)
 	}
 	return endpointTypes
 }

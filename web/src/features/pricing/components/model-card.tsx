@@ -45,6 +45,7 @@ import {
 } from '../lib/dynamic-price'
 import { parseTags } from '../lib/filters'
 import { isTokenBasedModel } from '../lib/model-helpers'
+import { withBasePricing } from '../lib/plugin-pricing'
 import { formatPrice, formatRequestPrice } from '../lib/price'
 import { taskPriceLabel, taskUsageUnitLabel } from '../lib/task-price-display'
 import type { PricingModel, PriceType, TokenUnit } from '../types'
@@ -69,7 +70,9 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
   const priceRate = props.priceRate ?? 1
   const usdExchangeRate = props.usdExchangeRate ?? 1
   const showRechargePrice = props.showRechargePrice ?? false
-  const isTokenBased = isTokenBasedModel(props.model)
+  // Prices summarise the model-level price when ordinary requests pay it.
+  const model = useMemo(() => withBasePricing(props.model), [props.model])
+  const isTokenBased = isTokenBasedModel(model)
   const tokenUnitLabel = tokenUnit === 'K' ? '1K' : '1M'
   const tags = parseTags(props.model.tags)
   const groups = props.model.enable_groups || []
@@ -78,8 +81,8 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
     custom?.icon || props.model.icon || props.model.vendor_icon
   const modelIcon = modelIconKey ? getLobeIcon(modelIconKey, 28) : null
   const initial = props.model.model_name?.charAt(0).toUpperCase() || '?'
-  const isUnconfiguredTaskUsage = isUnconfiguredTaskUsageModel(props.model)
-  const billingTime = useBillingTime(props.model.billing_expr)
+  const isUnconfiguredTaskUsage = isUnconfiguredTaskUsageModel(model)
+  const billingTime = useBillingTime(model.billing_expr)
   const currency = useSystemConfigStore((state) => state.config.currency)
   const dynamicPriceOptions = useMemo(
     () => ({
@@ -89,12 +92,12 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
       priceRate,
       usdExchangeRate,
       groupRatioMultiplier: getDynamicDisplayGroupRatio(
-        props.model,
+        model,
         props.selectedGroup
       ),
     }),
     [
-      props.model,
+      model,
       props.selectedGroup,
       billingTime,
       tokenUnit,
@@ -104,16 +107,16 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
     ]
   )
   const dynamicSummary = useMemo(
-    () => getDynamicPricingSummary(props.model, dynamicPriceOptions),
+    () => getDynamicPricingSummary(model, dynamicPriceOptions),
     // Currency is read indirectly by the price formatter.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [props.model, dynamicPriceOptions, currency]
+    [model, dynamicPriceOptions, currency]
   )
   const cardExamplePrice = useMemo(
-    () => getCardExamplePrice(props.model, dynamicPriceOptions),
+    () => getCardExamplePrice(model, dynamicPriceOptions),
     // Currency is read indirectly by the price formatter.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [props.model, dynamicPriceOptions, currency]
+    [model, dynamicPriceOptions, currency]
   )
   let priceSummary: ReactNode
   if (dynamicSummary) {
@@ -236,7 +239,7 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
     const prices: { type: PriceType; label: string }[] = [
       { type: 'input', label: t('Input') },
       { type: 'output', label: t('Output') },
-      ...(props.model.cache_ratio != null
+      ...(model.cache_ratio != null
         ? [{ type: 'cache' as const, label: t('Cached') }]
         : []),
     ]
@@ -246,7 +249,7 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
         <span className='inline-flex w-max items-baseline gap-x-1 text-sm font-semibold whitespace-nowrap tabular-nums'>
           <CurrencyText>
             {formatPrice(
-              props.model,
+              model,
               price.type,
               tokenUnit,
               showRechargePrice,
@@ -268,7 +271,7 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
         <span className='inline-flex w-max items-baseline gap-x-1 text-sm font-semibold whitespace-nowrap tabular-nums'>
           <CurrencyText>
             {formatRequestPrice(
-              props.model,
+              model,
               showRechargePrice,
               priceRate,
               usdExchangeRate,

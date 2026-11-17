@@ -10,6 +10,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
+	"github.com/QuantumNous/new-api/pkg/jsplugin"
 	commonRelay "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relaykit/dto"
 )
@@ -67,8 +68,9 @@ type Task struct {
 	Properties Properties            `json:"properties" gorm:"type:json"`
 	Username   string                `json:"username,omitempty" gorm:"-"`
 	// 禁止返回给用户，内部可能包含key等隐私信息
-	PrivateData TaskPrivateData `json:"-" gorm:"column:private_data;type:json"`
-	Data        json.RawMessage `json:"data" gorm:"type:json"`
+	PrivateData     TaskPrivateData `json:"-" gorm:"column:private_data;type:json"`
+	Data            json.RawMessage `json:"data" gorm:"type:json"`
+	ImageLogContent json.RawMessage `json:"-" gorm:"type:json"`
 }
 
 func (t *Task) SetData(data any) {
@@ -109,9 +111,10 @@ func (m Properties) Value() (driver.Value, error) {
 }
 
 type TaskPrivateData struct {
-	Key            string `json:"key,omitempty"`
-	UpstreamTaskID string `json:"upstream_task_id,omitempty"` // 上游真实 task ID
-	ResultURL      string `json:"result_url,omitempty"`       // 任务成功后的结果 URL（视频地址等）
+	ImageLog       *ImageTaskLogMeta `json:"image_log,omitempty"`
+	Key            string            `json:"key,omitempty"`
+	UpstreamTaskID string            `json:"upstream_task_id,omitempty"` // 上游真实 task ID
+	ResultURL      string            `json:"result_url,omitempty"`       // 任务成功后的结果 URL（视频地址等）
 	// Execution records safe, immutable request provenance. It lives next to
 	// other private task state so public task DTOs cannot expose it by accident.
 	Execution *TaskExecutionSnapshot `json:"execution,omitempty"`
@@ -136,6 +139,43 @@ type TaskPrivateData struct {
 	// and every retrieval surface treats the task as not found. The zero
 	// value keeps historical rows retained and retrievable.
 	ResultDiscarded bool `json:"result_discarded,omitempty"`
+	// CredentialAccount is the account of the plugin credential that
+	// submitted the task, which polls the task and fetches its content.
+	CredentialAccount string `json:"credential_account,omitempty"`
+	// RequestPlugins is set when a request plugin instance may report the
+	// task: the task reports once, at its final state.
+	RequestPlugins *TaskRequestPlugins `json:"request_plugins,omitempty"`
+}
+
+// ImageTaskLogMeta stays small so task lists do not load any image payloads.
+type ImageTaskLogMeta struct {
+	Endpoint     string `json:"endpoint"`
+	IP           string `json:"ip,omitempty"`
+	DurationMS   int64  `json:"duration_ms"`
+	InputTokens  int    `json:"input_tokens"`
+	OutputTokens int    `json:"output_tokens"`
+	HasContent   bool   `json:"has_content,omitempty"`
+}
+
+// TaskRequestPlugins is what the report of a task needs from its
+// submission. The request id and path are in Execution; the model, group,
+// user, channel and token are on the task.
+type TaskRequestPlugins struct {
+	// Instances are the ids of the report instances that matched.
+	Instances   []string `json:"instances"`
+	Format      string   `json:"format"`
+	ChannelType int      `json:"channel_type,omitempty"`
+	Attempt     int      `json:"attempt,omitempty"`
+	Username    string   `json:"username,omitempty"`
+	TokenName   string   `json:"token_name,omitempty"`
+	// StartedAt is when the submission started, in Unix milliseconds.
+	StartedAt int64 `json:"started_at"`
+	// Request is the client body as a report shows it, inline media
+	// replaced by references; null when it is not JSON or too large.
+	Request json.RawMessage           `json:"request,omitempty"`
+	Media   []jsplugin.TransformMedia `json:"media,omitempty"`
+	// Record is the submission's public record.
+	Record []commonRelay.RequestPluginRecord `json:"record,omitempty"`
 }
 
 type TaskExecutionSnapshot struct {
@@ -214,7 +254,7 @@ func (p TaskPrivateData) Value() (driver.Value, error) {
 		p.Execution == nil && p.BillingSource == "" && p.SubscriptionId == 0 &&
 		p.TokenId == 0 && p.NodeName == "" && p.BillingContext == nil &&
 		!p.ResponsesBackground && len(p.PluginState) == 0 && p.PollFailures == 0 &&
-		!p.ResultDiscarded {
+		!p.ResultDiscarded && p.RequestPlugins == nil && p.ImageLog == nil {
 		return nil, nil
 	}
 	// 同 Properties.Value:string 避免 PG simple protocol 的 bytea 编码。
@@ -248,6 +288,11 @@ func InitTask(platform constant.TaskPlatform, relayInfo *commonRelay.RelayInfo) 
 			relayInfo.ChannelMeta.ChannelType == constant.ChannelTypeVertexAi ||
 			relayInfo.ChannelMeta.ChannelType == constant.ChannelTypeNewAPI {
 			privateData.Key = relayInfo.ChannelMeta.ApiKey
+		}
+		if relayInfo.ChannelMeta.ChannelType == constant.ChannelTypeTaskPlugin {
+			if credential, ok := jsplugin.ParseCredential(relayInfo.ChannelMeta.ApiKey); ok {
+				privateData.CredentialAccount = credential.AccountID
+			}
 		}
 		if relayInfo.UpstreamModelName != "" {
 			properties.UpstreamModelName = relayInfo.UpstreamModelName
@@ -310,7 +355,7 @@ func TaskGetAllUserTask(userId int, startIdx int, num int, queryParams SyncTaskQ
 	// 获取数据
 	// Task lists never render the persisted upstream snapshot; the dashboard
 	// loads media through the artifacts endpoint instead.
-	err = query.Omit("channel_id", "data").Order("id desc").Limit(num).Offset(startIdx).Find(&tasks).Error
+	err = query.Omit("channel_id", "data", "image_log_content").Order("id desc").Limit(num).Offset(startIdx).Find(&tasks).Error
 	if err != nil {
 		return nil
 	}
@@ -355,7 +400,7 @@ func TaskGetAllTasks(startIdx int, num int, queryParams SyncTaskQueryParams) []*
 	}
 
 	// 获取数据
-	err = query.Omit("data").Order("id desc").Limit(num).Offset(startIdx).Find(&tasks).Error
+	err = query.Omit("data", "image_log_content").Order("id desc").Limit(num).Offset(startIdx).Find(&tasks).Error
 	if err != nil {
 		return nil
 	}

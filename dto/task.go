@@ -58,6 +58,7 @@ type TaskDto struct {
 	Data            json.RawMessage `json:"data"`
 	AdminInfo       *TaskAdminInfo  `json:"admin_info,omitempty"`
 	RootInfo        *TaskRootInfo   `json:"root_info,omitempty"`
+	ImageLog        any             `json:"image_log,omitempty"`
 }
 
 type TaskPluginInfo struct {

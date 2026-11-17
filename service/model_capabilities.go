@@ -33,6 +33,8 @@ func ValidateModelCapabilities(c *gin.Context, request dto.Request) error {
 		operation, output = "embedding", []string{"embedding"}
 	case relayconstant.RelayModeRerank:
 		operation, output = "rerank", nil
+	case relayconstant.RelayModeDecisions:
+		operation, output = "decision", []string{"decision"}
 	case relayconstant.RelayModeImagesGenerations, relayconstant.RelayModeImagesEdits:
 		operation, output = "image", []string{"image"}
 	case relayconstant.RelayModeAudioSpeech:
@@ -43,7 +45,7 @@ func ValidateModelCapabilities(c *gin.Context, request dto.Request) error {
 	if strings.Contains(c.Request.URL.Path, ":embedContent") || strings.Contains(c.Request.URL.Path, ":batchEmbedContents") {
 		operation, output = "embedding", []string{"embedding"}
 	}
-	if kind != "" && kind != operation {
+	if kind != "" && kind != operation && !(kind == "chat" && operation == "decision") {
 		return fmt.Errorf("model %q is a %s model and cannot be used for %s requests", name, kind, operation)
 	}
 	input := make(map[string]bool)

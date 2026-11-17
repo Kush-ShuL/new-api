@@ -557,4 +557,5 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 		Other:            other,
 	})
 	relayInfo.PerformanceOutputTokens = int64(summary.CompletionTokens)
+	captureImageTaskUsage(ctx, summary.PromptTokens, summary.CompletionTokens, summary.Quota)
 }

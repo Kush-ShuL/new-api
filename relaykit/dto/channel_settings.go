@@ -1,25 +1,27 @@
 package dto
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/url"
-	"regexp"
 	"slices"
 	"strings"
 	"sync"
 
+	"github.com/MoeForge/moego/regexp"
 	"github.com/QuantumNous/new-api/relaykit/types"
 )
 
 type ChannelSettings struct {
-	TaskPluginKey          string `json:"task_plugin_key,omitempty"`
-	ForceFormat            bool   `json:"force_format,omitempty"`
-	ThinkingToContent      bool   `json:"thinking_to_content,omitempty"`
-	Proxy                  string `json:"proxy"`
-	PassThroughBodyEnabled bool   `json:"pass_through_body_enabled,omitempty"`
-	ResponsesWebSocketMode string `json:"responses_websocket_mode,omitempty"`
-	SystemPrompt           string `json:"system_prompt,omitempty"`
-	SystemPromptOverride   bool   `json:"system_prompt_override,omitempty"`
+	TaskPluginKey             string `json:"task_plugin_key,omitempty"`
+	ForceFormat               bool   `json:"force_format,omitempty"`
+	ThinkingToContent         bool   `json:"thinking_to_content,omitempty"`
+	Proxy                     string `json:"proxy"`
+	PassThroughBodyEnabled    bool   `json:"pass_through_body_enabled,omitempty"`
+	ResponsesWebSocketMode    string `json:"responses_websocket_mode,omitempty"`
+	ResponsesWebSocketEnabled bool   `json:"responses_websocket_enabled,omitempty"` // compatibility with upstream plugin channels
+	SystemPrompt              string `json:"system_prompt,omitempty"`
+	SystemPromptOverride      bool   `json:"system_prompt_override,omitempty"`
 	// TaskExtendPluginKeys lists the task plugins a New API channel (type 60)
 	// is extended with. The upstream gateway may host many plugins, so the
 	// channel serves every listed plugin's models while the request still pins
@@ -35,6 +37,9 @@ type ChannelSettings struct {
 	// TLSInsecureSkipVerify accepts upstream certificates that fail
 	// verification, such as self-signed ones, for this channel only.
 	TLSInsecureSkipVerify bool `json:"tls_insecure_skip_verify,omitempty"`
+	// RequestPlugins lists the request plugin instances the channel binds,
+	// by instance id, in run order.
+	RequestPlugins []string `json:"request_plugins,omitempty"`
 }
 
 // BindsTaskPlugin reports whether the channel is bound to the task plugin,
@@ -156,6 +161,9 @@ type ChannelOtherSettings struct {
 	// rejection. Empty follows the default allow policy. Accepted values:
 	// "", "allow", "safe", "strict".
 	ToolLossPolicy string `json:"tool_loss_policy,omitempty"`
+	// PluginConfig is the config a type-61 channel gives its plugin, checked
+	// against the plugin's meta.channelConfig when the channel is saved.
+	PluginConfig json.RawMessage `json:"plugin_config,omitempty"`
 }
 
 func (s *ChannelOtherSettings) IsOpenRouterEnterprise() bool {
@@ -256,6 +264,12 @@ const (
 	// AdvancedCustomBalancePath identifies the optional balance lookup route used by channel management.
 	AdvancedCustomBalancePath = "/v1/dashboard/billing/credit_grants"
 )
+
+// AcceptsModel reports whether the route's Models list admits model, as
+// MatchPathForModel matches it; an empty list admits every model.
+func (r AdvancedCustomRoute) AcceptsModel(model string) bool {
+	return matchAdvancedCustomRouteModel(r.Models, strings.TrimSpace(model))
+}
 
 // IsNative reports whether the route forwards requests without protocol
 // conversion. Validate normalizes an empty converter to none, but callers may
@@ -369,6 +383,10 @@ func advancedCustomEndpointTypeFromIncomingPath(incomingPath string) (types.Endp
 		return types.EndpointTypeOpenAIResponseCompact, true
 	case advancedCustomEndpointPathOpenAIAlphaSearch:
 		return types.EndpointTypeOpenAIAlphaSearch, true
+	case "/v1/decisions":
+		return types.EndpointTypeOpenAIDecisions, true
+	case "/v1/systemone":
+		return types.EndpointTypeSystemOne, true
 	case advancedCustomEndpointPathDeepSeekToolsSearch:
 		return types.EndpointTypeDeepSeekToolsSearch, true
 	case advancedCustomEndpointPathDeepSeekToolsFetch:

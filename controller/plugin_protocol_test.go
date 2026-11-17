@@ -1772,6 +1772,8 @@ func TestServeTaskPluginImageProtocolWaitsForAsynchronousTask(t *testing.T) {
 // Submission failures use the OpenAI error envelope and surface a DashScope
 // {code, message} failure body as a readable vendor message.
 func TestServeTaskPluginImageProtocolSubmissionErrorUsesOpenAIEnvelope(t *testing.T) {
+	var events []string
+	database := setupTaskSubmissionDatabase(t, true, &events)
 	pinned := imageProtocolTestEndpoint(t)
 	c, recorder := newImageProtocolTestContext("")
 	deps := pluginProtocolTestDeps()
@@ -1787,6 +1789,57 @@ func TestServeTaskPluginImageProtocolSubmissionErrorUsesOpenAIEnvelope(t *testin
 	assert.Equal(t, "invalid_request_error", errorBody["type"])
 	assert.Contains(t, errorBody["message"], "n must be 1")
 	assert.NotContains(t, errorBody["message"], "request_id")
+	var task model.Task
+	require.NoError(t, database.Where("platform = ?", service.ImageRelayTaskPlatform).First(&task).Error)
+	assert.Equal(t, model.TaskStatus(model.TaskStatusFailure), task.Status)
+	require.NotNil(t, task.PrivateData.ImageLog)
+	assert.Equal(t, "/v1/images/generations", task.PrivateData.ImageLog.Endpoint)
+	assert.Empty(t, task.ImageLogContent)
+}
+
+func TestImageTaskLogContentFollowsOptions(t *testing.T) {
+	var events []string
+	database := setupTaskSubmissionDatabase(t, true, &events)
+	for _, key := range []string{"global.image_log_prompt", "global.image_log_input", "global.image_log_output"} {
+		common.OptionMapRWMutex.Lock()
+		if common.OptionMap == nil {
+			common.OptionMap = make(map[string]string)
+		}
+		previous, existed := common.OptionMap[key]
+		common.OptionMap[key] = "true"
+		common.OptionMapRWMutex.Unlock()
+		t.Cleanup(func() {
+			common.OptionMapRWMutex.Lock()
+			defer common.OptionMapRWMutex.Unlock()
+			if existed {
+				common.OptionMap[key] = previous
+			} else {
+				delete(common.OptionMap, key)
+			}
+		})
+	}
+	c, _ := newImageProtocolTestContext("")
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/images/edits", nil)
+	service.BeginPluginImageTaskLog(c, nil, []byte(`{"prompt":"a cat","images":[{"image_url":"https://images.example/input.png"}]}`))
+	started := time.Now()
+	task := model.Task{TaskID: "task_image_log", UserId: 71, Platform: "image-bridge", Status: model.TaskStatusSuccess}
+	service.AddImageTaskLog(c, &task, started)
+	require.NoError(t, task.InsertWithContext(t.Context()))
+	service.MarkImageTaskLogDurable(c)
+	service.CompletePluginImageTaskLog(c, &task, started, map[string]any{
+		"data":  []any{map[string]any{"url": "https://images.example/output.png"}},
+		"usage": map[string]any{"input_tokens": 42, "output_tokens": 21},
+	})
+	var stored model.Task
+	require.NoError(t, database.First(&stored, task.ID).Error)
+	require.NotNil(t, stored.PrivateData.ImageLog)
+	assert.Equal(t, "/v1/images/edits", stored.PrivateData.ImageLog.Endpoint)
+	assert.Equal(t, 42, stored.PrivateData.ImageLog.InputTokens)
+	assert.Equal(t, 21, stored.PrivateData.ImageLog.OutputTokens)
+	assert.JSONEq(t, `{"prompt":"a cat","input_images":["https://images.example/input.png"],"output_images":["https://images.example/output.png"]}`, string(stored.ImageLogContent))
+	public, err := common.Marshal(stored)
+	require.NoError(t, err)
+	assert.NotContains(t, string(public), "images.example")
 }
 
 // A synchronous image submission is billable the moment DashScope accepts it.
@@ -1863,6 +1916,9 @@ func TestServeTaskPluginImageProtocolDisconnectDuringSubmissionKeepsDurableSettl
 	assert.Equal(t, model.TaskStatus(model.TaskStatusSuccess), persisted.Status)
 	assert.Equal(t, 7, persisted.Quota)
 	assert.True(t, persisted.PrivateData.ResultDiscarded, "the inline image result is not retained after the barrier")
+	require.NotNil(t, persisted.PrivateData.ImageLog)
+	assert.Equal(t, "/v1/images/generations", persisted.PrivateData.ImageLog.Endpoint)
+	assert.Empty(t, persisted.ImageLogContent)
 	assert.Zero(t, polls, "an immediate result is never polled")
 	assert.False(t, c.Writer.Written())
 	assert.Empty(t, recorder.Body.String())

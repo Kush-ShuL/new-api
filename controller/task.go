@@ -5,10 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"regexp"
 	"strconv"
 	"strings"
 
+	"github.com/MoeForge/moego/regexp"
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
@@ -93,6 +93,14 @@ func GetDashboardTaskArtifacts(c *gin.Context) {
 
 func writeTaskArtifacts(c *gin.Context, task *model.Task, dashboard bool) {
 	c.Header("Cache-Control", "private, no-store")
+	if dashboard && task.PrivateData.ImageLog != nil {
+		response := gin.H{"task_id": task.TaskID, "artifacts": []taskArtifactResponse{}}
+		if task.PrivateData.ImageLog.HasContent && len(task.ImageLogContent) != 0 {
+			response["image_log_content"] = task.ImageLogContent
+		}
+		common.ApiSuccess(c, response)
+		return
+	}
 	artifacts, err := projectTaskArtifacts(task)
 	if err != nil {
 		writeTaskArtifactProjectionError(c, err)
@@ -235,6 +243,7 @@ func initTaskArtifactAdaptor(task *model.Task) (relaychannel.TaskAdaptor, error)
 	adaptor.Init(&relaycommon.RelayInfo{
 		ChannelMeta: &relaycommon.ChannelMeta{
 			ChannelType:     channelModel.Type,
+			ChannelId:       channelModel.Id,
 			ChannelBaseUrl:  baseURL,
 			ApiKey:          pluginKey,
 			ChannelSetting:  channelModel.GetSetting(),
@@ -458,6 +467,16 @@ func tasksToDto(tasks []*model.Task, fillUser bool, viewerRole int) []*dto.TaskD
 			}
 		}
 		item := relay.TaskModel2Dto(task)
+		if meta := task.PrivateData.ImageLog; meta != nil {
+			public := *meta
+			if task.FinishTime > task.SubmitTime {
+				public.DurationMS = max(public.DurationMS, (task.FinishTime-task.SubmitTime-1)*1000)
+			}
+			if viewerRole < common.RoleAdminUser {
+				public.IP = ""
+			}
+			item.ImageLog = public
+		}
 		item.LegacyVideoAvailable = legacyVideoAvailable(task)
 		item.ResultDiscarded = task.PrivateData.ResultDiscarded
 		if task.Status == model.TaskStatusSuccess {

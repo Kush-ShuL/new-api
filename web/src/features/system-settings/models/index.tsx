@@ -25,6 +25,9 @@ import {
 } from './section-registry.tsx'
 
 const defaultModelSettings: ModelSettings = {
+  'global.image_log_prompt': false,
+  'global.image_log_input': false,
+  'global.image_log_output': false,
   'global.responses_reasoning_encryption': true,
   'global.responses_reasoning_summary_mode': 'match',
   'global.responses_reasoning_summary_models': '{}',

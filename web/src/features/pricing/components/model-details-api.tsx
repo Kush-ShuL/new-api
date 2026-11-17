@@ -460,6 +460,55 @@ function buildImageSample(lang: Lang, ctx: SampleContext): string {
   ].join('\n')
 }
 
+function buildDecisionSample(lang: Lang, ctx: SampleContext): string {
+  const url = `${ctx.baseUrl}${ctx.endpointPath}`
+  const state = 'The checkout page returns an error.'
+  const instructions = 'Does this report describe a technical issue?'
+  const body = JSON.stringify(
+    ctx.endpointType === 'systemone'
+      ? {
+          model: ctx.modelName,
+          state,
+          questions: { technical: { type: 'noul', instructions } },
+        }
+      : {
+          model: ctx.modelName,
+          input: state,
+          questions: [{ type: 'predicate', name: 'technical', instructions }],
+        },
+    null,
+    2
+  )
+  if (lang === 'curl') {
+    return [
+      `curl "${url}" \\`,
+      `  -H "Authorization: Bearer $${ctx.apiKeyEnv}" \\`,
+      '  -H "Content-Type: application/json" \\',
+      `  -d '${body.replaceAll("'", "'\\''")}'`,
+    ].join('\n')
+  }
+  if (lang === 'python') {
+    return [
+      'import os',
+      'import requests',
+      '',
+      `headers = {"Authorization": "Bearer " + os.environ["${ctx.apiKeyEnv}"]}`,
+      `response = requests.post(${JSON.stringify(url)}, headers=headers, json=${body})`,
+      'response.raise_for_status()',
+      'print(response.json()["answers"])',
+    ].join('\n')
+  }
+  return [
+    `const response = await fetch(${JSON.stringify(url)}, {`,
+    "  method: 'POST',",
+    `  headers: { Authorization: \`Bearer \${process.env.${ctx.apiKeyEnv}}\`, 'Content-Type': 'application/json' },`,
+    `  body: JSON.stringify(${body}),`,
+    '})',
+    'if (!response.ok) throw new Error(await response.text())',
+    'console.log((await response.json()).answers)',
+  ].join('\n')
+}
+
 function buildSample(
   lang: Lang,
   endpointType: string,
@@ -471,6 +520,9 @@ function buildSample(
     return buildEmbeddingSample(lang, ctx)
   }
   if (endpointType === 'image-generation') return buildImageSample(lang, ctx)
+  if (endpointType === 'openai-decisions' || endpointType === 'systemone') {
+    return buildDecisionSample(lang, ctx)
+  }
   return buildChatSample(lang, ctx)
 }
 

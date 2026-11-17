@@ -51,6 +51,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { NodeSyncIndicator } from '@/features/system-info/components/node-sync-indicator'
 import {
   ADMIN_PERMISSION_ACTIONS,
   ADMIN_PERMISSION_RESOURCES,
@@ -108,6 +109,7 @@ export function ChannelsPrimaryButtons() {
   return (
     <>
       <div className='flex flex-wrap items-center gap-2'>
+        <NodeSyncIndicator topics={['channels']} />
         <div ref={setPriorityActionContainer} className='empty:hidden' />
         <div className='bg-muted/40 flex min-h-8 shrink-0 flex-wrap items-center gap-2.5 rounded-lg border px-2.5 py-1'>
           <div className='text-muted-foreground has-data-checked:text-foreground flex items-center gap-2'>

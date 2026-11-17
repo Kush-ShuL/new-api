@@ -525,6 +525,7 @@ export function ModelMutateDrawer(props: {
                                     label: t('Embeddings'),
                                   },
                                   { value: 'rerank', label: t('Rerank') },
+                                  { value: 'decision', label: t('Decision') },
                                   {
                                     value: 'image',
                                     label: t('Image generation'),

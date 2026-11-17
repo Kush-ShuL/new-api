@@ -198,6 +198,18 @@ export function parseTaskArtifactsResponse(
       response.data.legacy_audio_clips
     )
   }
+  const imageLog = response.data?.image_log_content
+  if (isRecord(imageLog)) {
+    const imageValues = (value: unknown) =>
+      Array.isArray(value)
+        ? value.filter((item): item is string => typeof item === 'string')
+        : []
+    projection.imageLogContent = {
+      prompt: typeof imageLog.prompt === 'string' ? imageLog.prompt : undefined,
+      inputImages: imageValues(imageLog.input_images),
+      outputImages: imageValues(imageLog.output_images),
+    }
+  }
   return projection
 }
 
@@ -216,6 +228,7 @@ export function resolveTaskPreviewMode(
   log: TaskLog,
   hasProjectedArtifacts = false
 ): TaskPreviewMode {
+  if (log.image_log || log.platform === 'image-relay') return 'none'
   if (log.status !== TASK_STATUS.SUCCESS) return 'none'
   // A synchronous result was returned inline and never persisted; there is
   // nothing to project, so the viewer explains that instead of opening.

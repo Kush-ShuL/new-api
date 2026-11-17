@@ -9,8 +9,8 @@ import (
 	"github.com/QuantumNous/new-api/common"
 )
 
-var modelTypes = []string{"", "chat", "embedding", "rerank", "image", "audio", "video"}
-var modelModalities = []string{"text", "image", "audio", "video", "file", "embedding"}
+var modelTypes = []string{"", "chat", "embedding", "rerank", "image", "audio", "video", "decision"}
+var modelModalities = []string{"text", "image", "audio", "video", "file", "embedding", "decision"}
 
 func (m *Model) ValidateCapabilities() error {
 	if m.ContextLength < 0 || m.ContextLength > math.MaxInt32 {
@@ -21,7 +21,7 @@ func (m *Model) ValidateCapabilities() error {
 	}
 	for direction, values := range [][]string{m.InputModalities, m.OutputModalities} {
 		for _, modality := range values {
-			if !slices.Contains(modelModalities, modality) || (direction == 0 && modality == "embedding") {
+			if !slices.Contains(modelModalities, modality) || (direction == 0 && (modality == "embedding" || modality == "decision")) {
 				return fmt.Errorf("invalid model modality: %s", modality)
 			}
 		}
@@ -38,6 +38,8 @@ func (m *Model) EffectiveCapabilities(name string) (kind string, input, output [
 	if kind == "" {
 		normalized := strings.ToLower(name)
 		switch {
+		case common.IsJevDecisionModel(normalized):
+			kind = "decision"
 		case strings.Contains(normalized, "embed"):
 			kind = "embedding"
 		case strings.Contains(normalized, "rerank"):
@@ -45,6 +47,9 @@ func (m *Model) EffectiveCapabilities(name string) (kind string, input, output [
 		case common.IsImageGenerationModel(name):
 			kind = "image"
 		}
+	}
+	if kind == "decision" && len(output) == 0 {
+		output = []string{"decision"}
 	}
 	return
 }

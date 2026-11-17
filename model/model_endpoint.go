@@ -143,6 +143,11 @@ func ModelAllowsEndpoint(name, method, path string) bool {
 			endpoint = constant.EndpointTypeOpenAIResponseCompact
 		case relayconstant.RelayModeAlphaSearch:
 			endpoint = constant.EndpointTypeOpenAIAlphaSearch
+		case relayconstant.RelayModeDecisions:
+			endpoint = constant.EndpointTypeOpenAIDecisions
+			if path == common.SystemOnePath {
+				endpoint = constant.EndpointTypeSystemOne
+			}
 		case relayconstant.RelayModeToolsSearch:
 			endpoint = constant.EndpointTypeDeepSeekToolsSearch
 		case relayconstant.RelayModeToolsFetch:
@@ -176,8 +181,12 @@ func (ch *Channel) ResponsesWebSocketMode(modelName string) string {
 			return policy.WebSocketMode
 		}
 	}
-	if mode := ch.GetSetting().ResponsesWebSocketMode; mode != "" {
+	settings := ch.GetSetting()
+	if mode := settings.ResponsesWebSocketMode; mode != "" {
 		return mode
+	}
+	if ch.Type == constant.ChannelTypeTaskPlugin && settings.ResponsesWebSocketEnabled {
+		return dto.ResponsesWSPassthrough
 	}
 	return dto.ResponsesWSHTTPBridge
 }

@@ -37,7 +37,16 @@ export const modelFormSchema = z.object({
   vendor_id: z.number(),
   endpoints: z.string().default(''),
   model_type: z
-    .enum(['', 'chat', 'embedding', 'rerank', 'image', 'audio', 'video'])
+    .enum([
+      '',
+      'chat',
+      'embedding',
+      'rerank',
+      'image',
+      'audio',
+      'video',
+      'decision',
+    ])
     .default(''),
   context_length: z.number().int().min(0).max(2147483647).default(0),
   input_modalities: z.array(z.string()).default([]),

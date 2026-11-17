@@ -57,6 +57,7 @@ export function getModelTypeLabels(t: TFunction): Record<string, string> {
     chat: t('Chat'),
     embedding: t('Embeddings'),
     rerank: t('Rerank'),
+    decision: t('Decision'),
     image: t('Image generation'),
     audio: t('Audio'),
     video: t('Video'),
@@ -71,6 +72,7 @@ export function getModalityLabels(t: TFunction): Record<string, string> {
     video: t('Video'),
     file: t('File'),
     embedding: t('Embeddings'),
+    decision: t('Decision'),
   }
 }
 
@@ -101,6 +103,8 @@ export const ENDPOINT_TYPES = {
   ALL: 'all',
   OPENAI: 'openai',
   OPENAI_RESPONSE: 'openai-response',
+  OPENAI_DECISIONS: 'openai-decisions',
+  SYSTEM_ONE: 'systemone',
   ANTHROPIC: 'anthropic',
   GEMINI: 'gemini',
   JINA_RERANK: 'jina-rerank',
@@ -120,6 +124,8 @@ export function getEndpointTypeLabels(
     [ENDPOINT_TYPES.ALL]: t('All Types'),
     [ENDPOINT_TYPES.OPENAI]: 'Chat',
     [ENDPOINT_TYPES.OPENAI_RESPONSE]: 'Response',
+    [ENDPOINT_TYPES.OPENAI_DECISIONS]: 'OpenAI Decisions',
+    [ENDPOINT_TYPES.SYSTEM_ONE]: 'System One',
     [ENDPOINT_TYPES.ANTHROPIC]: 'Anthropic',
     [ENDPOINT_TYPES.GEMINI]: 'Gemini',
     [ENDPOINT_TYPES.JINA_RERANK]: 'Rerank',
