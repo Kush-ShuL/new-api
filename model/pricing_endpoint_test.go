@@ -138,7 +138,7 @@ func TestPricingModelMetadataEndpointsReplaceChannelInference(t *testing.T) {
 func TestModelEndpointPolicy(t *testing.T) {
 	resetPricingEndpointTestTables(t)
 	insertPricingEndpointChannel(t, 105, constant.ChannelTypeOpenAI, dto.ChannelOtherSettings{})
-	for _, name := range []string{"messages-only", "responses-only", "both", "empty", "array", "family-chat", "family-response", "custom"} {
+	for _, name := range []string{"messages-only", "responses-only", "both", "empty", "array", "family-chat", "family-response", "custom", "deny-messages", "deny-none", "allow-none"} {
 		insertPricingEndpointAbility(t, 105, name)
 	}
 	require.NoError(t, DB.Create(&[]Model{
@@ -150,6 +150,9 @@ func TestModelEndpointPolicy(t *testing.T) {
 		{ModelName: "family-", NameRule: NameRulePrefix, Endpoints: `["anthropic"]`, Status: 1},
 		{ModelName: "family-response", Endpoints: `["openai-response"]`, Status: 1},
 		{ModelName: "custom", Endpoints: `{"custom":{"path":"/custom/infer","method":"PUT"}}`, Status: 1},
+		{ModelName: "deny-messages", Endpoints: `{"mode":"blacklist","endpoints":["anthropic"]}`, Status: 1},
+		{ModelName: "deny-none", Endpoints: `{"mode":"blacklist","endpoints":[]}`, Status: 1},
+		{ModelName: "allow-none", Endpoints: `{"mode":"whitelist","endpoints":[]}`, Status: 1},
 	}).Error)
 
 	GetPricing()
@@ -185,6 +188,12 @@ func TestModelEndpointPolicy(t *testing.T) {
 		{"family-response", "POST", "/v1/responses", true},
 		{"custom", "PUT", "/custom/infer", true},
 		{"custom", "POST", "/custom/infer", false},
+		{"deny-messages", "POST", "/v1/messages", false},
+		{"deny-messages", "POST", "/v1/messages/count_tokens", false},
+		{"deny-messages", "GET", "/v1/responses", true},
+		{"deny-messages", "POST", "/v1/chat/completions", true},
+		{"deny-none", "POST", "/v1/messages", true},
+		{"allow-none", "POST", "/v1/responses", false},
 		{"unconfigured", "POST", "/v1/chat/completions", true},
 	} {
 		t.Run(tc.model+tc.method+tc.path, func(t *testing.T) {
@@ -196,6 +205,40 @@ func TestModelEndpointPolicy(t *testing.T) {
 	RefreshPricing()
 	assert.False(t, ModelAllowsEndpoint("responses-only", "POST", "/v1/responses"))
 	assert.True(t, ModelAllowsEndpoint("responses-only", "POST", "/v1/messages"))
+}
+
+func TestParseModelEndpointPolicy(t *testing.T) {
+	for _, tc := range []struct {
+		raw     string
+		mode    string
+		names   []string
+		invalid bool
+	}{
+		{raw: ""},
+		{raw: `{}`},
+		{raw: `["openai-response"]`, mode: "whitelist", names: []string{"openai-response"}},
+		{raw: `{"mode":"blacklist","endpoints":{"anthropic":"/v1/messages"}}`, mode: "blacklist", names: []string{"anthropic"}},
+		{raw: `{"mode":"whitelist","endpoints":[]}`, mode: "whitelist", names: []string{}},
+		{raw: `{"mode":"other","endpoints":[]}`, invalid: true},
+		{raw: `{"mode":"blacklist"}`, invalid: true},
+		{raw: `{"mode":"whitelist","endpoints":{"x":{"path":"bad"}}}`, invalid: true},
+	} {
+		t.Run(tc.raw, func(t *testing.T) {
+			policy, err := ParseModelEndpointPolicy(tc.raw)
+			if tc.invalid {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			if tc.mode == "" {
+				assert.Nil(t, policy)
+				return
+			}
+			require.NotNil(t, policy)
+			assert.Equal(t, tc.mode, policy.Mode)
+			assert.Equal(t, tc.names, policy.Endpoints)
+		})
+	}
 }
 
 func TestPricingModelMetadataEndpointsCanProvideEndpointWithoutChannelInference(t *testing.T) {
@@ -235,7 +278,7 @@ func TestPricingAdvancedCustomMissingConfigFallsBackToChannelType(t *testing.T) 
 	assert.Equal(t, []constant.EndpointType{constant.EndpointTypeOpenAI}, byModel["gpt-4o"])
 }
 
-func TestPricingNativeChannelEndpointTypesUnchanged(t *testing.T) {
+func TestPricingKeepsNativeProtocolFirstAndIncludesConversions(t *testing.T) {
 	resetPricingEndpointTestTables(t)
 
 	insertPricingEndpointChannel(t, 201, constant.ChannelTypeOpenAI, dto.ChannelOtherSettings{})
@@ -247,9 +290,11 @@ func TestPricingNativeChannelEndpointTypesUnchanged(t *testing.T) {
 
 	byModel := pricingEndpointTypesByModel(t)
 
-	assert.Equal(t, []constant.EndpointType{constant.EndpointTypeOpenAI}, byModel["gpt-4o"])
-	assert.Equal(t, []constant.EndpointType{constant.EndpointTypeGemini, constant.EndpointTypeOpenAI}, byModel["gemini-2.5-flash"])
-	assert.Equal(t, []constant.EndpointType{constant.EndpointTypeAnthropic, constant.EndpointTypeOpenAI}, byModel["claude-3-5-sonnet"])
+	all := []constant.EndpointType{constant.EndpointTypeOpenAI, constant.EndpointTypeAnthropic, constant.EndpointTypeGemini, constant.EndpointTypeOpenAIResponse}
+	for name, preferred := range map[string]constant.EndpointType{"gpt-4o": constant.EndpointTypeOpenAI, "gemini-2.5-flash": constant.EndpointTypeGemini, "claude-3-5-sonnet": constant.EndpointTypeAnthropic} {
+		assert.ElementsMatch(t, all, byModel[name])
+		assert.Equal(t, preferred, byModel[name][0])
+	}
 }
 
 func TestInitChannelCacheInvalidatesPricingCache(t *testing.T) {

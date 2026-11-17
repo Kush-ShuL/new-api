@@ -383,9 +383,19 @@ func DoFormRequest(a Adaptor, c *gin.Context, info *common.RelayInfo, requestBod
 // request context, and reports a rejected handshake as a *types.NewAPIError
 // carrying the upstream status code (types.NewError preserves it).
 func DoWssRequest(a Adaptor, c *gin.Context, info *common.RelayInfo, requestBody io.Reader) (*websocket.Conn, error) {
+	fullRequestURL, targetHeader, err := PrepareWebSocketHandshake(a, c, info)
+	if err != nil {
+		return nil, err
+	}
+	return DialWebSocket(c, info, fullRequestURL, targetHeader)
+}
+
+// PrepareWebSocketHandshake resolves the complete URL and authentication/header
+// mapping. Pool identities use these exact values, never a partial channel key.
+func PrepareWebSocketHandshake(a Adaptor, c *gin.Context, info *common.RelayInfo) (string, http.Header, error) {
 	fullRequestURL, err := a.GetRequestURL(info)
 	if err != nil {
-		return nil, fmt.Errorf("get request url failed: %w", err)
+		return "", nil, fmt.Errorf("get request url failed: %w", err)
 	}
 	fullRequestURL = toWebSocketURL(fullRequestURL)
 	if targetURL, parseErr := url.Parse(fullRequestURL); parseErr == nil {
@@ -394,18 +404,22 @@ func DoWssRequest(a Adaptor, c *gin.Context, info *common.RelayInfo, requestBody
 	targetHeader := http.Header{}
 	err = a.SetupRequestHeader(c, &targetHeader, info)
 	if err != nil {
-		return nil, fmt.Errorf("setup request header failed: %w", err)
+		return "", nil, fmt.Errorf("setup request header failed: %w", err)
 	}
 	// 在 SetupRequestHeader 之后应用 Header Override，确保用户设置优先级最高
 	// 这样可以覆盖默认的 Authorization header 设置
 	headerOverride, err := processHeaderOverride(info, c)
 	if err != nil {
-		return nil, err
+		return "", nil, err
 	}
 	for key, value := range headerOverride {
 		targetHeader.Set(key, value)
 	}
 	targetHeader.Set("Content-Type", c.Request.Header.Get("Content-Type"))
+	return fullRequestURL, targetHeader, nil
+}
+
+func DialWebSocket(c *gin.Context, info *common.RelayInfo, fullRequestURL string, targetHeader http.Header) (*websocket.Conn, error) {
 	dialer := *websocket.DefaultDialer
 	if info.ChannelSetting.Proxy != "" {
 		proxyURL, _, proxyErr := common2.ParseProxyURLRuntime(info.ChannelSetting.Proxy)

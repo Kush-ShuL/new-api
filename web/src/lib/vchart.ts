@@ -18,10 +18,14 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useSystemConfigStore } from '@/stores/system-config-store'
 
+export const CHART_TOOLTIP = {
+  className: 'newapi-chart-tooltip',
+}
+
 // VChart builds its tooltip outside React, so replace only formatted monetary
 // values in its value column. Model names and other tooltip text stay untouched.
 export const CURRENCY_TOOLTIP = {
-  className: 'newapi-chart-tooltip',
+  ...CHART_TOOLTIP,
   updateElement(element: HTMLElement) {
     const currency = useSystemConfigStore.getState().config.currency
     const symbol = currency.customCurrencySymbol

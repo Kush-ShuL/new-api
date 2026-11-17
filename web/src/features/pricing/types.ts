@@ -77,6 +77,11 @@ export type PricingModel = {
   enable_groups: string[]
   tags?: string
   supported_endpoint_types?: string[]
+  model_type?: string
+  endpoint_policy?: {
+    mode: 'whitelist' | 'blacklist'
+    endpoints: string[]
+  }
   key?: string
   group_ratio?: Record<string, number>
   /** Billing mode (e.g. "tiered_expr") used to flag dynamic pricing */
@@ -104,7 +109,20 @@ export type PricingModel = {
 }
 
 /** Input/output modalities supported by a model. */
-export type Modality = 'text' | 'image' | 'audio' | 'video' | 'file'
+export type Modality =
+  | 'text'
+  | 'image'
+  | 'audio'
+  | 'video'
+  | 'file'
+  | 'embedding'
+
+export type ModelCapabilityFilters = {
+  modelType: string
+  inputModalities: string[]
+  outputModalities: string[]
+  minContext: number
+}
 
 /** Functional capabilities a model exposes. */
 export type ModelCapability =

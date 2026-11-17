@@ -46,6 +46,10 @@ export interface Model {
   tags?: string
   vendor_id?: number
   endpoints?: string
+  model_type?: string
+  context_length?: number
+  input_modalities?: string[]
+  output_modalities?: string[]
   supported_endpoints?: string[]
   status: number
   sync_official: number

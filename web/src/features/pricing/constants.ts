@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { type TFunction } from 'i18next'
+import type { TFunction } from 'i18next'
 
 import type { TokenUnit } from './types'
 
@@ -51,6 +51,28 @@ export function getSortLabels(t: TFunction): Record<SortOption, string> {
 
 /** Filter values */
 export const FILTER_ALL = 'all'
+
+export function getModelTypeLabels(t: TFunction): Record<string, string> {
+  return {
+    chat: t('Chat'),
+    embedding: t('Embeddings'),
+    rerank: t('Rerank'),
+    image: t('Image generation'),
+    audio: t('Audio'),
+    video: t('Video'),
+  }
+}
+
+export function getModalityLabels(t: TFunction): Record<string, string> {
+  return {
+    text: t('Text'),
+    image: t('Image'),
+    audio: t('Audio'),
+    video: t('Video'),
+    file: t('File'),
+    embedding: t('Embeddings'),
+  }
+}
 
 /** Quota type options */
 export const QUOTA_TYPES = {

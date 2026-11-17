@@ -12,14 +12,14 @@ import (
 )
 
 type ChannelSettings struct {
-	TaskPluginKey             string `json:"task_plugin_key,omitempty"`
-	ForceFormat               bool   `json:"force_format,omitempty"`
-	ThinkingToContent         bool   `json:"thinking_to_content,omitempty"`
-	Proxy                     string `json:"proxy"`
-	PassThroughBodyEnabled    bool   `json:"pass_through_body_enabled,omitempty"`
-	ResponsesWebSocketEnabled bool   `json:"responses_websocket_enabled,omitempty"`
-	SystemPrompt              string `json:"system_prompt,omitempty"`
-	SystemPromptOverride      bool   `json:"system_prompt_override,omitempty"`
+	TaskPluginKey          string `json:"task_plugin_key,omitempty"`
+	ForceFormat            bool   `json:"force_format,omitempty"`
+	ThinkingToContent      bool   `json:"thinking_to_content,omitempty"`
+	Proxy                  string `json:"proxy"`
+	PassThroughBodyEnabled bool   `json:"pass_through_body_enabled,omitempty"`
+	ResponsesWebSocketMode string `json:"responses_websocket_mode,omitempty"`
+	SystemPrompt           string `json:"system_prompt,omitempty"`
+	SystemPromptOverride   bool   `json:"system_prompt_override,omitempty"`
 	// TaskExtendPluginKeys lists the task plugins a New API channel (type 60)
 	// is extended with. The upstream gateway may host many plugins, so the
 	// channel serves every listed plugin's models while the request still pins
@@ -67,6 +67,21 @@ const (
 	HTTPProtocolHTTP1        = "http1"
 	MaxHTTP2ConnectionShards = 8
 )
+
+const (
+	ResponsesWSPool        = "pool"
+	ResponsesWSPassthrough = "passthrough"
+	ResponsesWSHTTPBridge  = "http_bridge"
+)
+
+func ValidateResponsesWebSocketMode(mode string) error {
+	switch mode {
+	case "", ResponsesWSPool, ResponsesWSPassthrough, ResponsesWSHTTPBridge:
+		return nil
+	default:
+		return fmt.Errorf("invalid responses_websocket_mode: %s", mode)
+	}
+}
 
 // ValidateHTTPTransport validates save-time HTTP transport channel settings.
 func (s *ChannelSettings) ValidateHTTPTransport() error {
@@ -132,6 +147,7 @@ type ChannelOtherSettings struct {
 	UpstreamModelUpdateLastRemovedModels  []string              `json:"upstream_model_update_last_removed_models,omitempty"`  // 上次检测到的可删除模型
 	UpstreamModelUpdateIgnoredModels      []string              `json:"upstream_model_update_ignored_models,omitempty"`       // 手动忽略的模型
 	AdvancedCustom                        *AdvancedCustomConfig `json:"advanced_custom,omitempty"`
+	Aggregate                             *AggregateConfig      `json:"aggregate,omitempty"`
 	// OllamaOpenAIChat routes Ollama chat completions to the OpenAI-compatible
 	// /v1/chat/completions endpoint. When unset, chat completions keep using
 	// the native /api/chat protocol.
@@ -171,6 +187,8 @@ const (
 	advancedCustomConverterOpenAIChatToOpenAIResponses = "openai_chat_completions_to_openai_responses"
 	advancedCustomConverterOpenAIResponsesToOpenAIChat = "openai_responses_to_openai_chat_completions"
 	advancedCustomConverterOpenAIResponsesToGemini     = "openai_responses_to_gemini_generate_content"
+	advancedCustomConverterOpenAIResponsesToClaude     = "openai_responses_to_claude_messages"
+	advancedCustomConverterGeminiToClaude              = "gemini_generate_content_to_claude_messages"
 	advancedCustomConverterGeminiContentToOpenAIChat   = "gemini_generate_content_to_openai_chat_completions"
 	advancedCustomConverterOpenAIChatToGeminiContent   = "openai_chat_completions_to_gemini_generate_content"
 	// Same values as relayconvert.ConverterClaudeMessagesToOpenAIResponses and
@@ -459,6 +477,8 @@ func IsAdvancedCustomConverterAllowed(converter string) bool {
 		advancedCustomConverterOpenAIChatToOpenAIResponses,
 		advancedCustomConverterOpenAIResponsesToOpenAIChat,
 		advancedCustomConverterOpenAIResponsesToGemini,
+		advancedCustomConverterOpenAIResponsesToClaude,
+		advancedCustomConverterGeminiToClaude,
 		advancedCustomConverterGeminiContentToOpenAIChat,
 		advancedCustomConverterOpenAIChatToGeminiContent,
 		advancedCustomConverterClaudeMessagesToOpenAIResponses,
@@ -668,7 +688,7 @@ func validateAdvancedCustomConverterPath(index int, incomingPath string, convert
 		if incomingPath == "/v1/chat/completions" {
 			return nil
 		}
-	case advancedCustomConverterOpenAIResponsesToOpenAIChat:
+	case advancedCustomConverterOpenAIResponsesToOpenAIChat, advancedCustomConverterOpenAIResponsesToClaude:
 		if incomingPath == "/v1/responses" {
 			return nil
 		}
@@ -677,7 +697,7 @@ func validateAdvancedCustomConverterPath(index int, incomingPath string, convert
 			return nil
 		}
 	case advancedCustomConverterGeminiContentToOpenAIChat,
-		advancedCustomConverterGeminiContentToOpenAIResponses:
+		advancedCustomConverterGeminiContentToOpenAIResponses, advancedCustomConverterGeminiToClaude:
 		if strings.Contains(incomingPath, ":generateContent") || strings.Contains(incomingPath, ":streamGenerateContent") {
 			return nil
 		}

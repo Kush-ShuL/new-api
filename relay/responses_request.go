@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/MoeForge/moego/ojson"
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/logger"
 	relaychannel "github.com/QuantumNous/new-api/relay/channel"
@@ -13,6 +14,7 @@ import (
 	"github.com/QuantumNous/new-api/relay/helper"
 	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/relaykit/types"
+	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/model_setting"
 	"github.com/gin-gonic/gin"
 )
@@ -49,7 +51,7 @@ func PrepareResponsesRequest(c *gin.Context, info *relaycommon.RelayInfo, req *d
 		return nil, nil, nil, types.NewError(fmt.Errorf("invalid api type: %d", info.ApiType), types.ErrorCodeInvalidApiType, types.ErrOptionWithSkipRetry())
 	}
 	adaptor.Init(info)
-	if model_setting.GetGlobalSettings().PassThroughRequestEnabled || info.ChannelSetting.PassThroughBodyEnabled {
+	if (model_setting.GetGlobalSettings().PassThroughRequestEnabled || info.ChannelSetting.PassThroughBodyEnabled) && !c.GetBool("responses_http_bridge") && !c.GetBool("responses_ws_native") && !c.GetBool("responses_context_expanded") && len(request.ContextManagement) == 0 {
 		storage, err := common.GetBodyStorage(c)
 		if err != nil {
 			return nil, nil, nil, types.NewError(err, types.ErrorCodeReadRequestBodyFailed, types.ErrOptionWithSkipRetry())
@@ -67,6 +69,33 @@ func PrepareResponsesRequest(c *gin.Context, info *relaycommon.RelayInfo, req *d
 	if err != nil {
 		return nil, nil, nil, types.NewError(err, types.ErrorCodeConvertRequestFailed, types.ErrOptionWithSkipRetry())
 	}
+	if raw, ok := c.Get("responses_ws_body"); ok && c.GetBool("responses_ws_native") {
+		doc := ojson.NewDoc(raw.([]byte))
+		if err := doc.Set("model", request.Model); err != nil {
+			return nil, nil, nil, newConvertRequestFailedError(c, info, err)
+		}
+		if request.Reasoning != nil {
+			if err := doc.Set("reasoning", request.Reasoning); err != nil {
+				return nil, nil, nil, newConvertRequestFailedError(c, info, err)
+			}
+		}
+		for key, value := range map[string]common.RawMessage{"context_management": request.ContextManagement} {
+			if len(value) > 0 {
+				if err := doc.SetRawBytes(key, value); err != nil {
+					return nil, nil, nil, newConvertRequestFailedError(c, info, err)
+				}
+			}
+		}
+		if c.GetBool("responses_pool_expand_context") {
+			if err := doc.SetRawBytes("input", request.Input); err != nil {
+				return nil, nil, nil, newConvertRequestFailedError(c, info, err)
+			}
+			if err := relaycommon.DeleteJSONMember(doc, "previous_response_id"); err != nil {
+				return nil, nil, nil, newConvertRequestFailedError(c, info, err)
+			}
+		}
+		jsonData = doc.Bytes()
+	}
 	jsonData, err = relaycommon.RemoveDisabledFields(jsonData, info.ChannelOtherSettings, info.ChannelSetting.PassThroughBodyEnabled)
 	if err != nil {
 		return nil, nil, nil, types.NewError(err, types.ErrorCodeConvertRequestFailed, types.ErrOptionWithSkipRetry())
@@ -82,6 +111,24 @@ func PrepareResponsesRequest(c *gin.Context, info *relaycommon.RelayInfo, req *d
 		jsonData, err = finalizer.FinalizeResponsesRequest(info, jsonData)
 		if err != nil {
 			return nil, nil, nil, newConvertRequestFailedError(c, info, err)
+		}
+	}
+	if info.GetFinalRequestRelayFormat() == types.RelayFormatOpenAIResponses {
+		var final dto.OpenAIResponsesRequest
+		if err := common.Unmarshal(jsonData, &final); err != nil {
+			return nil, nil, nil, newConvertRequestFailedError(c, info, err)
+		}
+		if helper.ExceedsMaxTokensLimit(final.MaxOutputTokens) {
+			return nil, nil, nil, newConvertRequestFailedError(c, info, fmt.Errorf("max_output_tokens is invalid"))
+		}
+		if err := service.ValidateResponsesContextManagement(info.OriginModelName, &final); err != nil {
+			return nil, nil, nil, newConvertRequestFailedError(c, info, err)
+		}
+		if len(final.ContextManagement) > 0 {
+			jsonData, err = ojson.SetRawBytes(jsonData, "context_management", final.ContextManagement)
+			if err != nil {
+				return nil, nil, nil, newConvertRequestFailedError(c, info, err)
+			}
 		}
 	}
 

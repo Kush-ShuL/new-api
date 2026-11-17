@@ -6,6 +6,7 @@ import (
 	"math"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
@@ -90,6 +91,42 @@ func TestIsResponsesEventStreamContentType(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.Equal(t, tt.want, isResponsesEventStreamContentType(tt.contentType))
+		})
+	}
+}
+
+func TestCloudflareConvertsClientProtocolsWithoutPanic(t *testing.T) {
+	for _, format := range []relaytypes.RelayFormat{relaytypes.RelayFormatClaude, relaytypes.RelayFormatGemini, relaytypes.RelayFormatOpenAIResponses} {
+		t.Run(string(format), func(t *testing.T) {
+			writer := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(writer)
+			c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+			info := &relaycommon.RelayInfo{RelayFormat: format, RelayMode: relayconstant.RelayModeResponses, RequestConversionChain: []relaytypes.RelayFormat{format},
+				ChannelMeta: &relaycommon.ChannelMeta{ChannelType: constant.ChannelCloudflare, ChannelBaseUrl: "https://api.cloudflare.com", ApiVersion: "account", UpstreamModelName: "@cf/example"}}
+			adaptor := GetAdaptor(constant.APITypeCloudflare)
+			adaptor.Init(info)
+			var converted any
+			var err error
+			switch format {
+			case relaytypes.RelayFormatClaude:
+				converted, err = adaptor.ConvertClaudeRequest(c, info, &dto.ClaudeRequest{Model: "@cf/example", MaxTokens: common.GetPointer(uint(16)), Messages: []dto.ClaudeMessage{{Role: "user", Content: "hello"}}})
+			case relaytypes.RelayFormatGemini:
+				converted, err = adaptor.ConvertGeminiRequest(c, info, &dto.GeminiChatRequest{Contents: []dto.GeminiChatContent{{Role: "user", Parts: []dto.GeminiPart{{Text: "hello"}}}}})
+			default:
+				converted, err = adaptor.ConvertOpenAIResponsesRequest(c, info, dto.OpenAIResponsesRequest{Model: "@cf/example", Input: common.RawMessage(`"hello"`)})
+			}
+			require.NoError(t, err)
+			require.IsType(t, &dto.GeneralOpenAIRequest{}, converted)
+			relaycommon.AppendRequestConversionFromRequest(info, converted)
+			upstreamURL, err := adaptor.GetRequestURL(info)
+			require.NoError(t, err)
+			assert.Equal(t, "https://api.cloudflare.com/client/v4/accounts/account/ai/v1/chat/completions", upstreamURL)
+			body := `{"id":"chatcmpl_cf","object":"chat.completion","model":"@cf/example","choices":[{"index":0,"message":{"role":"assistant","content":"converted answer"},"finish_reason":"stop"}],"usage":{"prompt_tokens":3,"completion_tokens":2,"total_tokens":5}}`
+			usage, apiErr := adaptor.DoResponse(c, &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": []string{"application/json"}}, Body: io.NopCloser(strings.NewReader(body))}, info)
+			require.Nil(t, apiErr)
+			require.IsType(t, &dto.Usage{}, usage)
+			assert.Equal(t, 5, usage.(*dto.Usage).TotalTokens)
+			assert.Contains(t, writer.Body.String(), "converted answer")
 		})
 	}
 }

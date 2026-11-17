@@ -24,6 +24,10 @@ func SearchModelsMeta(c *gin.Context) {
 
 func listModelsMeta(c *gin.Context, keyword, vendor string) {
 	squareState := model.ModelSquareState(c.Query("square_state"))
+	status := c.Query("status")
+	if status == "unavailable" {
+		squareState, status = model.ModelSquareUnavailable, ""
+	}
 	switch squareState {
 	case "", model.ModelSquareVisible, model.ModelSquareUnavailable, model.ModelSquareHidden, model.ModelSquarePartial:
 	default:
@@ -46,7 +50,7 @@ func listModelsMeta(c *gin.Context, keyword, vendor string) {
 	if c.Query("include_channel_models") == "true" {
 		search = model.SearchModelsWithChannels
 	}
-	modelsMeta, total, err := search(keyword, vendor, c.Query("status"), c.Query("sync_official"), offset, limit)
+	modelsMeta, total, err := search(keyword, vendor, status, c.Query("sync_official"), offset, limit)
 	if err != nil {
 		common.ApiError(c, err)
 		return

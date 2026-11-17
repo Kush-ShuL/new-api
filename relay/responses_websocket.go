@@ -17,6 +17,7 @@ import (
 	appconstant "github.com/QuantumNous/new-api/constant"
 	appdto "github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/i18n"
+	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/middleware"
 	appmodel "github.com/QuantumNous/new-api/model"
 	perfmetrics "github.com/QuantumNous/new-api/pkg/perf_metrics"
@@ -71,11 +72,12 @@ type responsesWSMessage struct {
 	err    error
 }
 
-// responsesWSControl is a client control event (response.cancel) whose
+// responsesWSControl is a client control event (response.cancel or response.interrupt) whose
 // envelope the read loop already parsed.
 type responsesWSControl struct {
 	body              []byte
 	eventID, streamID string
+	interrupted       chan bool
 }
 
 // Only the request worker reads or changes billing state. Socket readers pass
@@ -105,6 +107,7 @@ type responsesWSSession struct {
 	targetWriteMu sync.Mutex
 	connectionMu  sync.Mutex
 	target        *websocket.Conn
+	poolLease     *responsesConnectionLease
 	unregister    func()
 	stateMu       sync.Mutex
 	current       *responsesWSCallState
@@ -122,6 +125,7 @@ type responsesWSSession struct {
 	lockedKeyIndex  int
 	lockedContext   map[appconstant.ContextKey]any
 	lockedRoute     dto.AdvancedCustomRoute
+	contextCache    service.ResponsesSessionContext
 }
 
 func ResponsesWebSocketHelper(c *gin.Context, client *websocket.Conn, runner ResponsesWSRequestRunner) *types.NewAPIError {
@@ -158,21 +162,66 @@ func ResponsesWebSocketHelper(c *gin.Context, client *websocket.Conn, runner Res
 			// Controls are owned by the active request too. In particular a cancel
 			// arriving during authentication must not precede its upstream create.
 			state := s.getCurrent()
-			if eventType != "response.cancel" || state == nil {
+			if eventType == "response.interrupt" && state == nil {
+				requestedID := ojson.GetBytesNoCopy(message, "response_id").String()
+				_ = s.sendInterruptAcknowledgement(responsesWSControl{eventID: envelope.EventID, streamID: streamID}, requestedID, requestedID != "" && requestedID == s.lastResponseID)
+				continue
+			}
+			if (eventType != "response.cancel" && eventType != "response.interrupt") || state == nil {
 				s.sendError(envelope.EventID, streamID, newResponsesWSInvalidRequestError(fmt.Errorf("unsupported websocket event %q", eventType)))
 				continue
 			}
+			control := responsesWSControl{body: message, eventID: envelope.EventID, streamID: streamID}
+			if eventType == "response.interrupt" {
+				control.interrupted = make(chan bool, 1)
+			}
 			select {
-			case state.controls <- responsesWSControl{body: message, eventID: envelope.EventID, streamID: streamID}:
+			case state.controls <- control:
 			case <-state.done:
+				if control.interrupted != nil {
+					requestedID := ojson.GetBytesNoCopy(message, "response_id").String()
+					_ = s.sendInterruptAcknowledgement(control, requestedID, requestedID != "" && requestedID == s.lastResponseID)
+				}
+				continue
 			case <-s.ctx.Done():
 				return nil
 			default:
-				s.sendError(envelope.EventID, streamID, newResponsesWSInvalidRequestError(errors.New("a response control event is already pending")))
+				if control.interrupted != nil {
+					_ = s.sendInterruptAcknowledgement(control, ojson.GetBytesNoCopy(message, "response_id").String(), false)
+				} else {
+					s.sendError(envelope.EventID, streamID, newResponsesWSInvalidRequestError(errors.New("a response control event is already pending")))
+				}
+				continue
+			}
+			if control.interrupted != nil {
+				// Finish the interrupt handshake before admitting the next create.
+				// A terminal can win this race without consuming the queued control.
+				select {
+				case endsRequest := <-control.interrupted:
+					if endsRequest {
+						select {
+						case <-state.done:
+						case <-s.ctx.Done():
+							return nil
+						}
+					}
+				case <-state.done:
+					select {
+					case <-control.interrupted:
+					default:
+						requestedID := ojson.GetBytesNoCopy(message, "response_id").String()
+						_ = s.sendInterruptAcknowledgement(control, requestedID, requestedID != "" && requestedID == s.lastResponseID)
+					}
+				case <-s.ctx.Done():
+					return nil
+				}
 			}
 			continue
 		}
 		state := &responsesWSCallState{inbox: make(chan responsesWSMessage), controls: make(chan responsesWSControl, 1), done: make(chan struct{})}
+		if s.nextEventIndex == 0 {
+			logger.LogInfo(c, common.LogText("Responses WebSocket first request received: bytes=%d", len(message)))
+		}
 		if !s.tryReserveCurrent(state) {
 			s.sendError(envelope.EventID, streamID, types.NewErrorWithStatusCode(errors.New("another response.create is already in progress on this websocket connection"), types.ErrorCodeInvalidRequest, http.StatusConflict, types.ErrOptionWithSkipRetry()))
 			continue
@@ -230,6 +279,8 @@ func (s *responsesWSSession) runRequest(state *responsesWSCallState, message []b
 		}
 		c.Request.Body = io.NopCloser(bytes.NewReader(create.Body))
 		c.Request.ContentLength = int64(len(create.Body))
+		c.Set("responses_session_context", &s.contextCache)
+		c.Set("responses_ws_body", create.Body)
 		callErr := s.runCall(c, state, create)
 		upstreamURLs = common.UpstreamAddresses(c)
 		return callErr
@@ -260,6 +311,7 @@ func (s *responsesWSSession) runCall(c *gin.Context, state *responsesWSCallState
 		if info != nil && billingPrepared {
 			apiErr = RefundFailedRequestBilling(c, info, apiErr)
 		}
+		s.finishPooledResponse(apiErr == nil && state.terminal != nil && state.closeCode == 0 && s.ctx.Err() == nil, s.lastResponseID)
 	}()
 	if modelName == "" {
 		return newResponsesWSInvalidRequestError(errors.New("model is required"))
@@ -275,6 +327,18 @@ func (s *responsesWSSession) runCall(c *gin.Context, state *responsesWSCallState
 		}, http.StatusForbidden, types.ErrOptionWithSkipRetry())
 	}
 	common.SetContextKey(c, appconstant.ContextKeyOriginalModel, modelName)
+	c.Set("responses_warmup", strings.TrimSpace(string(create.Generate)) == "false")
+	billingRequest, err := common.DeepCopy(&create.Request)
+	if err != nil {
+		return newResponsesWSInvalidRequestError(err)
+	}
+	if err := service.PrepareStatefulResponsesRequest(c, billingRequest); err != nil {
+		return newResponsesWSInvalidRequestError(err)
+	}
+	if err := service.ValidateModelCapabilities(c, billingRequest); err != nil {
+		return types.NewErrorWithStatusCode(err, types.ErrorCode("model_capability_mismatch"), http.StatusBadRequest, types.ErrOptionWithSkipRetry())
+	}
+	create.Request.ContextManagement = billingRequest.ContextManagement
 	common.SetContextKey(c, appconstant.ContextKeyRequestStartTime, time.Now())
 	service.GetChannelConstraints(c).AddFilter(appdto.ChannelFilter{Kind: appdto.FilterRequestPath, RequestPath: c.Request.URL.Path})
 
@@ -284,7 +348,8 @@ func (s *responsesWSSession) runCall(c *gin.Context, state *responsesWSCallState
 		if apiErr = s.restoreConnectionContext(c, modelName); apiErr != nil {
 			return apiErr
 		}
-		info = relaycommon.GenRelayInfoResponses(c, &create.Request)
+		c.Set("responses_ws_native", true)
+		info = relaycommon.GenRelayInfoResponses(c, billingRequest)
 		info.IsStream = true
 		common.SetContextKey(c, appconstant.ContextKeyIsStream, true)
 		if apiErr = PrepareRequestBilling(c, info); apiErr != nil {
@@ -309,8 +374,22 @@ func (s *responsesWSSession) runCall(c *gin.Context, state *responsesWSCallState
 				return apiErr
 			}
 			service.AppendUsedChannel(c, channel.Id)
+			delete(c.Keys, "responses_http_bridge")
+			delete(c.Keys, "responses_ws_native")
+			delete(c.Keys, "responses_pool_expand_context")
+			mode := channel.ResponsesWebSocketMode(modelName)
+			if mode == dto.ResponsesWSHTTPBridge {
+				create.Request = *billingRequest
+				create.Request.Stream = common.GetPointer(true)
+				c.Set("responses_http_bridge", true)
+				if strings.TrimSpace(string(create.Generate)) == "false" {
+					return s.warmHTTPBridge(c, state, create)
+				}
+			} else {
+				c.Set("responses_ws_native", true)
+			}
 			if info == nil {
-				info = relaycommon.GenRelayInfoResponses(c, &create.Request)
+				info = relaycommon.GenRelayInfoResponses(c, billingRequest)
 				info.IsStream = true
 				common.SetContextKey(c, appconstant.ContextKeyIsStream, true)
 				if apiErr = PrepareRequestBilling(c, info); apiErr != nil {
@@ -325,6 +404,13 @@ func (s *responsesWSSession) runCall(c *gin.Context, state *responsesWSCallState
 			}
 			info.RetryIndex = retry.GetRetry()
 			policy.BeginAttempt(channel, info.UsingGroup)
+			if mode == dto.ResponsesWSHTTPBridge {
+				return s.runHTTPBridge(c, state, create, info)
+			}
+			if mode == dto.ResponsesWSPassthrough && create.Request.PreviousResponseID != "" && billingRequest.PreviousResponseID == "" {
+				create.Request.Input, create.Request.PreviousResponseID = billingRequest.Input, ""
+				c.Set("responses_pool_expand_context", true)
+			}
 			var payload []byte
 			payload, apiErr = buildResponsesWSCreatePayload(c, info, create.Request, create.Generate, create.StreamID)
 			if apiErr != nil {
@@ -332,7 +418,28 @@ func (s *responsesWSSession) runCall(c *gin.Context, state *responsesWSCallState
 			}
 			adaptor := GetAdaptor(info.ApiType)
 			adaptor.Init(info)
-			target, dialErr := relaychannel.DoWssRequest(adaptor, c, info, nil)
+			var target *websocket.Conn
+			var lease *responsesConnectionLease
+			var dialErr error
+			dialStarted := time.Now()
+			logger.LogInfo(c, common.LogText("Responses WebSocket opening upstream: prepare_ms=%d, bytes=%d", time.Since(started).Milliseconds(), len(payload)))
+			if mode == dto.ResponsesWSPool {
+				lease, dialErr = acquireResponsesConnection(c, adaptor, info, create.Request.PreviousResponseID)
+				if dialErr == nil {
+					target = lease.entry.conn
+					if create.Request.PreviousResponseID != "" && !lease.reusedContext {
+						create.Request.Input, create.Request.PreviousResponseID = billingRequest.Input, ""
+						c.Set("responses_pool_expand_context", true)
+						payload, apiErr = buildResponsesWSCreatePayload(c, info, create.Request, create.Generate, create.StreamID)
+						if apiErr != nil {
+							lease.release(false, "")
+							return apiErr
+						}
+					}
+				}
+			} else {
+				target, dialErr = relaychannel.DoWssRequest(adaptor, c, info, nil)
+			}
 			if dialErr != nil {
 				apiErr = service.NormalizeViolationFeeError(types.NewError(dialErr, types.ErrorCodeDoRequestFailed))
 				service.ResetStatusCode(apiErr, c.GetString("status_code_mapping"))
@@ -345,13 +452,19 @@ func (s *responsesWSSession) runCall(c *gin.Context, state *responsesWSCallState
 				}
 				return apiErr
 			}
-			if !s.setTarget(target) {
+			if !s.setTarget(target, lease) {
+				if lease != nil {
+					lease.release(false, "")
+				}
 				return types.NewError(context.Canceled, types.ErrorCodeBadResponse, types.ErrOptionWithSkipRetry())
 			}
+			logger.LogInfo(c, common.LogText("Responses WebSocket upstream connected: dial_ms=%d", time.Since(dialStarted).Milliseconds()))
+			writeStarted := time.Now()
 			if err := s.writeTarget(websocket.TextMessage, payload); err != nil {
 				state.closeCode = websocket.CloseInternalServerErr
 				return types.NewError(err, types.ErrorCodeBadResponse, types.ErrOptionWithSkipRetry())
 			}
+			logger.LogInfo(c, common.LogText("Responses WebSocket first request forwarded: write_ms=%d", time.Since(writeStarted).Milliseconds()))
 			s.lockedModel, s.lockedChannelID, s.lockedGroup = modelName, channel.Id, info.UsingGroup
 			s.lockedKey, s.lockedKeyIndex = info.ApiKey, info.ChannelMultiKeyIndex
 			s.lockedRoute, _ = channel.GetOtherSettings().AdvancedCustom.MatchPathForModel(c.Request.URL.Path, modelName)
@@ -370,6 +483,9 @@ func (s *responsesWSSession) runCall(c *gin.Context, state *responsesWSCallState
 			}
 			s.registerChannelClose(channel.Id)
 			s.startTargetReader(target)
+			if lease != nil {
+				s.lockedChannelID = 0
+			}
 			apiErr = nil
 			break
 		}
@@ -392,6 +508,7 @@ func (s *responsesWSSession) runCall(c *gin.Context, state *responsesWSCallState
 	var pendingControl []byte
 	var sentControl []byte
 	var responseID string
+	nextSequenceNumber := 0
 	for {
 		select {
 		case incoming := <-state.inbox:
@@ -405,6 +522,9 @@ func (s *responsesWSSession) runCall(c *gin.Context, state *responsesWSCallState
 				ConsumeResponsesQuota(c, info, accumulator.Finish())
 				return nil
 			}
+			if !info.HasSendResponse() {
+				logger.LogInfo(c, common.LogText("Responses WebSocket first upstream event received: elapsed_ms=%d, bytes=%d", time.Since(started).Milliseconds(), len(incoming.body)))
+			}
 			info.SetFirstResponseTime()
 			var event struct {
 				dto.ResponsesStreamResponse
@@ -413,6 +533,9 @@ func (s *responsesWSSession) runCall(c *gin.Context, state *responsesWSCallState
 			if err := common.Unmarshal(incoming.body, &event); err != nil {
 				info.StreamStatus.RecordError("invalid upstream websocket event")
 			} else {
+				if event.SequenceNumber != nil {
+					nextSequenceNumber = max(nextSequenceNumber, *event.SequenceNumber+1)
+				}
 				if event.Type != "error" && event.StreamID != "" && event.StreamID != create.StreamID {
 					if err := s.writeClient(incoming.kind, incoming.body); err != nil {
 						s.shutdown(websocket.CloseInternalServerErr, "")
@@ -473,7 +596,7 @@ func (s *responsesWSSession) runCall(c *gin.Context, state *responsesWSCallState
 				if strings.HasPrefix(event.Type, "response.") {
 					if !accepted {
 						// Like HTTP, bind the session only once upstream accepted the request.
-						service.RecordChannelAffinity(c, s.lockedChannelID)
+						service.RecordChannelAffinity(c, info.ChannelId)
 					}
 					accepted = true
 					if event.Response != nil && event.Response.ID != "" {
@@ -486,6 +609,12 @@ func (s *responsesWSSession) runCall(c *gin.Context, state *responsesWSCallState
 			case "response.completed", "response.done", "response.incomplete", "response.failed", "response.cancelled", "response.canceled":
 				if event.Response != nil {
 					s.lastResponseID = event.Response.ID
+					if body := ojson.GetBytesNoCopy(incoming.body, "response"); body.Exists() && event.Response.ID != "" {
+						if err := service.SaveResponsesContext(c, event.Response.ID, billingRequest, []byte(body.Raw)); err != nil {
+							ConsumeResponsesQuota(c, info, accumulator.Finish())
+							return types.NewError(err, types.ErrorCodeBadResponse, types.ErrOptionWithSkipRetry())
+						}
+					}
 				}
 				info.StreamStatus.SetEndReason(relaycommon.StreamEndReasonDone, nil)
 				state.terminal = &incoming
@@ -503,6 +632,40 @@ func (s *responsesWSSession) runCall(c *gin.Context, state *responsesWSCallState
 				pendingControl = nil
 			}
 		case control := <-state.controls:
+			if ojson.GetBytesNoCopy(control.body, "type").String() == "response.interrupt" {
+				requestedID := ojson.GetBytesNoCopy(control.body, "response_id").String()
+				if (control.streamID != "" && control.streamID != create.StreamID) || (requestedID != "" && requestedID != responseID) {
+					_ = s.sendInterruptAcknowledgement(control, requestedID, requestedID != "" && requestedID == s.lastResponseID)
+					control.interrupted <- false
+					continue
+				}
+				// Interrupt is a client-side cancellation, not an upstream event.
+				// Release the upstream while keeping this client socket usable.
+				s.disconnectTarget()
+				s.lockedChannelID = 0
+				if responseID == "" {
+					responseID = "resp_" + common.NewRequestId()
+				}
+				control.interrupted <- true
+				if err := s.sendInterruptAcknowledgement(control, responseID, true); err != nil {
+					s.shutdown(websocket.CloseInternalServerErr, "")
+					return types.NewError(err, types.ErrorCodeBadResponse, types.ErrOptionWithSkipRetry())
+				}
+				body, err := buildResponsesWSInterruptedEvent(responseID, modelName, create.StreamID, nextSequenceNumber)
+				if err != nil {
+					return types.NewError(err, types.ErrorCodeBadResponse, types.ErrOptionWithSkipRetry())
+				}
+				if err := service.SaveResponsesContext(c, responseID, billingRequest, []byte(ojson.GetBytesNoCopy(body, "response").Raw)); err != nil {
+					ConsumeResponsesQuota(c, info, accumulator.Finish())
+					return types.NewError(err, types.ErrorCodeBadResponse, types.ErrOptionWithSkipRetry())
+				}
+				info.StreamStatus.MarkCancelled()
+				info.StreamStatus.SetEndReason(relaycommon.StreamEndReasonClientGone, nil)
+				s.lastResponseID = responseID
+				state.terminal = &responsesWSMessage{kind: websocket.TextMessage, body: body}
+				ConsumeResponsesQuota(c, info, accumulator.Finish())
+				return nil
+			}
 			if pendingControl != nil || sentControl != nil {
 				s.sendError(control.eventID, control.streamID, newResponsesWSInvalidRequestError(errors.New("a response control event is already pending")))
 				continue
@@ -562,7 +725,7 @@ func (s *responsesWSSession) restoreConnectionContext(c *gin.Context, model stri
 	// The channel type is not rechecked: a locked channel keeps its type, and
 	// the FilterResponsesWebSocket rules were applied when it was selected.
 	channel, err := appmodel.CacheGetChannel(s.lockedChannelID)
-	if err != nil || channel == nil || channel.Status != common.ChannelStatusEnabled || !channel.GetSetting().ResponsesWebSocketEnabled {
+	if err != nil || channel == nil || channel.Status != common.ChannelStatusEnabled || channel.ResponsesWebSocketMode(model) != dto.ResponsesWSPassthrough {
 		return types.NewErrorWithStatusCode(errors.New("Responses WebSocket is disabled for this channel"), types.ErrorCode(appdto.FilterResponsesWebSocket), http.StatusForbidden, types.ErrOptionWithSkipRetry())
 	}
 	keyEnabled := channel.Key == s.lockedKey
@@ -642,14 +805,33 @@ func buildResponsesWSCreatePayload(c *gin.Context, info *relaycommon.RelayInfo, 
 }
 
 func (s *responsesWSSession) startTargetReader(target *websocket.Conn) {
+	s.connectionMu.Lock()
+	lease := s.poolLease
+	s.connectionMu.Unlock()
 	limit := int64(helper.DefaultMaxScannerBufferSize)
 	if appconstant.StreamScannerMaxBufferMB > 0 {
 		limit = int64(appconstant.StreamScannerMaxBufferMB) << 20
 	}
-	target.SetReadLimit(limit)
+	if lease == nil {
+		target.SetReadLimit(limit)
+	}
 	s.workers.Go(func() {
 		for {
-			kind, body, err := target.ReadMessage()
+			var kind int
+			var body []byte
+			var err error
+			if lease == nil {
+				kind, body, err = target.ReadMessage()
+			} else {
+				select {
+				case event := <-lease.events:
+					kind, body, err = event.kind, event.body, event.err
+				case <-lease.done:
+					return
+				case <-s.ctx.Done():
+					return
+				}
+			}
 			if target != s.getTarget() {
 				return
 			}
@@ -709,7 +891,7 @@ func (s *responsesWSSession) getTarget() *websocket.Conn {
 	return s.target
 }
 
-func (s *responsesWSSession) setTarget(target *websocket.Conn) bool {
+func (s *responsesWSSession) setTarget(target *websocket.Conn, lease *responsesConnectionLease) bool {
 	s.connectionMu.Lock()
 	if s.ctx.Err() != nil {
 		s.connectionMu.Unlock()
@@ -719,6 +901,7 @@ func (s *responsesWSSession) setTarget(target *websocket.Conn) bool {
 	}
 	previous, unregister := s.target, s.unregister
 	s.target = target
+	s.poolLease = lease
 	s.unregister = nil
 	s.connectionMu.Unlock()
 	if unregister != nil {
@@ -729,6 +912,22 @@ func (s *responsesWSSession) setTarget(target *websocket.Conn) bool {
 		_ = previous.Close()
 	}
 	return true
+}
+
+func (s *responsesWSSession) disconnectTarget() {
+	s.connectionMu.Lock()
+	target, unregister, lease := s.target, s.unregister, s.poolLease
+	s.target, s.unregister, s.poolLease = nil, nil, nil
+	s.connectionMu.Unlock()
+	if unregister != nil {
+		unregister()
+	}
+	if lease != nil {
+		lease.release(false, "")
+	} else if target != nil {
+		_ = target.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, "response interrupted"), time.Now().Add(time.Second))
+		_ = target.Close()
+	}
 }
 
 func (s *responsesWSSession) writeTarget(kind int, message []byte) error {
@@ -763,6 +962,40 @@ func (s *responsesWSSession) sendError(eventID, streamID string, apiErr *types.N
 	}
 }
 
+func (s *responsesWSSession) sendInterruptAcknowledgement(control responsesWSControl, responseID string, accepted bool) error {
+	kind := "response.interrupt.failed"
+	if accepted {
+		kind = "response.interrupt.accepted"
+	}
+	payload := map[string]any{"type": kind, "response_id": responseID}
+	if control.eventID != "" {
+		payload["event_id"] = control.eventID
+	}
+	if control.streamID != "" {
+		payload["stream_id"] = control.streamID
+	}
+	body, err := common.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	return s.writeClient(websocket.TextMessage, body)
+}
+
+func buildResponsesWSInterruptedEvent(responseID, model, streamID string, sequenceNumber int) ([]byte, error) {
+	payload := map[string]any{
+		"type": "response.incomplete", "sequence_number": sequenceNumber,
+		"response": map[string]any{
+			"id": responseID, "object": "response", "created_at": time.Now().Unix(),
+			"status": "incomplete", "incomplete_details": map[string]string{"reason": "interrupted"},
+			"model": model, "output": []any{},
+		},
+	}
+	if streamID != "" {
+		payload["stream_id"] = streamID
+	}
+	return common.Marshal(payload)
+}
+
 // shutdown ends the connection once. Each peer gets a close frame that says
 // why, bounded to one second, and both sockets close even if a write failed.
 // Close frames are control writes, which gorilla allows alongside a blocked
@@ -771,15 +1004,17 @@ func (s *responsesWSSession) shutdown(code int, reason string) {
 	s.closeOnce.Do(func() {
 		s.cancel()
 		s.connectionMu.Lock()
-		target, unregister := s.target, s.unregister
-		s.target, s.unregister = nil, nil
+		target, unregister, lease := s.target, s.unregister, s.poolLease
+		s.target, s.unregister, s.poolLease = nil, nil, nil
 		s.connectionMu.Unlock()
 		if unregister != nil {
 			unregister()
 		}
 		closeMessage := websocket.FormatCloseMessage(code, reason)
 		_ = s.client.WriteControl(websocket.CloseMessage, closeMessage, time.Now().Add(time.Second))
-		if target != nil {
+		if lease != nil {
+			lease.release(false, "")
+		} else if target != nil {
 			_ = target.WriteControl(websocket.CloseMessage, closeMessage, time.Now().Add(time.Second))
 			_ = target.Close()
 		}

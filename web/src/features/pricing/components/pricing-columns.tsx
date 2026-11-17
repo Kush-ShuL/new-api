@@ -32,6 +32,7 @@ import { getLobeIcon } from '@/lib/lobe-icon'
 import { parseTags } from '../lib/filters'
 import type { PricingModel } from '../types'
 import { CachedPriceCell } from './cached-price-cell'
+import { EndpointPolicy } from './endpoint-policy'
 import { ModelBillingModeBadge } from './model-billing-mode-badge'
 import { ModelPriceCell, type ModelPriceCellOptions } from './model-price-cell'
 
@@ -160,24 +161,11 @@ export function usePricingColumns(
 
     // Endpoints column
     {
-      accessorKey: 'supported_endpoint_types',
-      header: t('Endpoints'),
-      cell: ({ row }) => {
-        const endpoints = row.original.supported_endpoint_types || []
-        return (
-          <BadgeListCell
-            items={endpoints.map((ep) => (
-              <StatusBadge
-                key={ep}
-                label={ep}
-                autoColor={ep}
-                size='sm'
-                copyable={false}
-              />
-            ))}
-          />
-        )
-      },
+      accessorKey: 'endpoint_policy',
+      header: t('Endpoint restrictions'),
+      cell: ({ row }) => (
+        <EndpointPolicy policy={row.original.endpoint_policy} />
+      ),
       size: 130,
       enableSorting: false,
     },

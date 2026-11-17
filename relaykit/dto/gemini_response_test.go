@@ -27,8 +27,8 @@ func TestGeminiChatResponseUsageMetadataPresence(t *testing.T) {
 	assert.True(t, HasGeminiUsageMetadataTokens(populated.GetUsageMetadata()))
 }
 
-func TestGeminiChatResponseMarshalKeepsUsageMetadataField(t *testing.T) {
+func TestGeminiChatResponseMarshalOmitsUnavailableUsageMetadata(t *testing.T) {
 	data, err := kitutil.Marshal(GeminiChatResponse{})
 	require.NoError(t, err)
-	assert.Contains(t, string(data), `"usageMetadata"`)
+	assert.NotContains(t, string(data), `"usageMetadata"`)
 }

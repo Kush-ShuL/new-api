@@ -22,7 +22,7 @@ import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { useChartTheme } from '@/lib/use-chart-theme'
-import { VCHART_OPTION } from '@/lib/vchart'
+import { CHART_TOOLTIP, VCHART_OPTION } from '@/lib/vchart'
 
 import { formatShare, formatTokens } from '../lib/format'
 import type { RankingPeriod, VendorRanking, VendorShareSeries } from '../types'
@@ -166,6 +166,7 @@ export function MarketShareSection(props: MarketShareSectionProps) {
         },
       ],
       tooltip: {
+        ...CHART_TOOLTIP,
         mark: {
           content: [
             {

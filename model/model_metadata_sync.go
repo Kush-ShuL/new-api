@@ -105,50 +105,8 @@ func ValidateMetadataValues(values MetadataValues) error {
 // ValidateModelEndpoints accepts the existing map form (custom paths) and
 // type-array form (declared protocols), but never arbitrary JSON scalars.
 func ValidateModelEndpoints(raw string) error {
-	if strings.TrimSpace(raw) == "" {
-		return nil
-	}
-	var value any
-	if err := common.UnmarshalJsonStr(raw, &value); err != nil {
-		return fmt.Errorf("invalid endpoints: %w", err)
-	}
-	switch endpoints := value.(type) {
-	case []any:
-		for _, endpoint := range endpoints {
-			if text, ok := endpoint.(string); !ok || strings.TrimSpace(text) == "" {
-				return errors.New("endpoint types must be non-empty strings")
-			}
-		}
-	case map[string]any:
-		for key, endpoint := range endpoints {
-			if strings.TrimSpace(key) == "" {
-				return errors.New("endpoint type is required")
-			}
-			switch details := endpoint.(type) {
-			case string:
-				if !strings.HasPrefix(details, "/") {
-					return errors.New("endpoint paths must start with /")
-				}
-			case map[string]any:
-				path, _ := details["path"].(string)
-				if !strings.HasPrefix(path, "/") {
-					return errors.New("endpoint paths must start with /")
-				}
-				if method, exists := details["method"]; exists {
-					switch method {
-					case "GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS":
-					default:
-						return errors.New("invalid endpoint HTTP method")
-					}
-				}
-			default:
-				return errors.New("endpoint configuration must be a path or object")
-			}
-		}
-	default:
-		return errors.New("endpoints must be a JSON object or array")
-	}
-	return nil
+	_, err := ParseModelEndpointPolicy(raw)
+	return err
 }
 
 func ApplyMetadataSync(updates []MetadataSyncUpdate, upstreamVendors map[string]Vendor) (*MetadataSyncResult, error) {

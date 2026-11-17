@@ -228,6 +228,9 @@ export type ContentSettings = {
 }
 
 export type ModelSettings = {
+  'global.responses_reasoning_encryption': boolean
+  'global.responses_reasoning_summary_mode': 'match' | 'model'
+  'global.responses_reasoning_summary_models': string
   'global.pass_through_request_enabled': boolean
   'global.thinking_model_blacklist': string
   'global.chat_completions_to_responses_policy': string

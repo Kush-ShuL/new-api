@@ -98,6 +98,12 @@ func (a *Adaptor) ConvertGeminiRequest(c *gin.Context, info *relaycommon.RelayIn
 		return a.convertCrossProtocolChatRequest(c, info, converter, request)
 	case relayconvert.ConverterGeminiContentToOpenAIResponses:
 		return convertCrossProtocolResponsesRequest(c, info, converter, request)
+	case "gemini_generate_content_to_claude_messages":
+		result, err := service.ConvertRequestByID(c, info, converter, request)
+		if err != nil {
+			return nil, err
+		}
+		return result.Value, nil
 	default:
 		return nil, fmt.Errorf("converter %q does not support Gemini generateContent requests", converter)
 	}
@@ -123,6 +129,12 @@ func (a *Adaptor) ConvertOpenAIResponsesRequest(c *gin.Context, info *relaycommo
 			return nil, fmt.Errorf("expected Gemini generateContent request, got %T", result.Value)
 		}
 		return geminiRequest, nil
+	case relayconvert.ConverterOpenAIResponsesToClaudeMessages:
+		result, err := service.ConvertRequestByID(c, info, converter, request)
+		if err != nil {
+			return nil, err
+		}
+		return result.Value, nil
 	default:
 		return nil, fmt.Errorf("converter %q does not support OpenAI Responses requests", converter)
 	}
@@ -294,7 +306,7 @@ func (a *Adaptor) DoResponse(c *gin.Context, resp *http.Response, info *relaycom
 	case relayconvert.ConverterClaudeMessagesToOpenAIChat,
 		relayconvert.ConverterGeminiContentToOpenAIChat:
 		return a.openaiAdaptor.DoResponse(c, resp, info)
-	case relayconvert.ConverterOpenAIChatToClaudeMessages:
+	case relayconvert.ConverterOpenAIChatToClaudeMessages, relayconvert.ConverterOpenAIResponsesToClaudeMessages, "gemini_generate_content_to_claude_messages":
 		return a.claudeAdaptor.DoResponse(c, resp, info)
 	case relayconvert.ConverterOpenAIChatToGeminiContent:
 		return a.geminiAdaptor.DoResponse(c, resp, info)
@@ -490,7 +502,7 @@ func useGeminiStreamGenerateContentURL(parsedURL *url.URL) {
 }
 
 func shouldApplyClaudeHeaders(converter string, info *relaycommon.RelayInfo) bool {
-	return converter == relayconvert.ConverterOpenAIChatToClaudeMessages ||
+	return converter == relayconvert.ConverterOpenAIChatToClaudeMessages || converter == relayconvert.ConverterOpenAIResponsesToClaudeMessages || converter == "gemini_generate_content_to_claude_messages" ||
 		(converter == relayconvert.ConverterNone && info != nil && info.RelayFormat == types.RelayFormatClaude)
 }
 

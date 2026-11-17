@@ -255,7 +255,7 @@ describe('model cards', () => {
     expect(within(idle).getByText('—t/s')).toBeVisible()
   })
 
-  it('keeps group, endpoint and tag overflow counts with their own metadata', () => {
+  it('shows endpoint restrictions and keeps group and tag overflow counts with their own metadata', () => {
     const groups = ['default-with-a-long-group-name', 'premium', 'internal']
     const endpoints = ['openai-response', 'openai', 'claude', 'gemini', 'jina']
     const tags = [
@@ -271,6 +271,10 @@ describe('model cards', () => {
         model={pricingModel({
           enable_groups: groups,
           supported_endpoint_types: endpoints,
+          endpoint_policy: {
+            mode: 'whitelist',
+            endpoints: ['openai-response'],
+          },
           tags: tags.join(','),
         })}
         onClick={vi.fn()}
@@ -278,9 +282,8 @@ describe('model cards', () => {
     )
 
     const groupField = screen.getByText('Groups').parentElement
-    const endpointField = screen.getByText('Endpoints').parentElement
-    if (!groupField || !endpointField) {
-      throw new Error('Expected labeled group and endpoint fields')
+    if (!groupField) {
+      throw new Error('Expected labeled group field')
     }
     const tagField = screen.getByRole('group', { name: 'Tags' })
     expect(within(groupField).getByText(groups[0])).toBeVisible()
@@ -288,10 +291,8 @@ describe('model cards', () => {
       'title',
       groups.slice(1).join(', ')
     )
-    expect(
-      within(endpointField).getByText('openai-response, openai')
-    ).toHaveAttribute('title', endpoints.join(', '))
-    expect(within(endpointField).getByText('+3')).toBeVisible()
+    expect(screen.getByText('Only allowed:')).toBeVisible()
+    expect(screen.getByTitle('Response')).toBeVisible()
     expect(
       within(tagField).getByText('video-generation, high-resolution')
     ).toHaveAttribute('title', tags.join(', '))
@@ -627,11 +628,11 @@ describe('model cards', () => {
     expect(onModelClick).toHaveBeenCalledWith('example-model')
   })
 
-  it('paginates the model cards and disables navigation at both boundaries', async () => {
+  it('fills complete two- and three-column pages and disables navigation at both boundaries', async () => {
     const request = vi.spyOn(api, 'get').mockResolvedValue({
       data: { success: true, data: { models: [] } },
     })
-    const models = Array.from({ length: 21 }, (_, index) =>
+    const models = Array.from({ length: 25 }, (_, index) =>
       pricingModel({ id: index + 1, model_name: `model-${index + 1}` })
     )
     const user = userEvent.setup()
@@ -641,19 +642,19 @@ describe('model cards', () => {
       </QueryClientProvider>
     )
     expect(screen.getByRole('button', { name: 'Previous page' })).toBeDisabled()
-    expect(screen.getAllByRole('heading', { level: 3 })).toHaveLength(20)
+    expect(screen.getAllByRole('heading', { level: 3 })).toHaveLength(24)
     expect(request).toHaveBeenCalledWith('/api/perf-metrics/summary', {
       params: {
         hours: 24,
-        recent_model: models.slice(0, 20).map((model) => model.model_name),
+        recent_model: models.slice(0, 24).map((model) => model.model_name),
       },
       paramsSerializer: { indexes: null },
     })
     await user.click(screen.getByRole('button', { name: 'Next page' }))
     expect(screen.getAllByRole('heading', { level: 3 })).toHaveLength(1)
-    expect(screen.getByRole('heading', { name: 'model-21' })).toBeVisible()
+    expect(screen.getByRole('heading', { name: 'model-25' })).toBeVisible()
     expect(request).toHaveBeenLastCalledWith('/api/perf-metrics/summary', {
-      params: { hours: 24, recent_model: ['model-21'] },
+      params: { hours: 24, recent_model: ['model-25'] },
       paramsSerializer: { indexes: null },
     })
     expect(screen.getByRole('button', { name: 'Next page' })).toBeDisabled()

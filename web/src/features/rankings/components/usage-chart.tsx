@@ -23,12 +23,13 @@ import { useTranslation } from 'react-i18next'
 
 import { EmptyState } from '@/components/empty-state'
 import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useModelCustomizations } from '@/hooks/use-model-customizations'
 import { toIntlLocale } from '@/i18n/languages'
 import { formatCompactNumber, formatNumber } from '@/lib/format'
 import { useChartTheme } from '@/lib/use-chart-theme'
-import { VCHART_OPTION } from '@/lib/vchart'
+import { CHART_TOOLTIP, VCHART_OPTION } from '@/lib/vchart'
 
 import { buildUsageSeries, type UsageMetric } from '../lib/usage-series'
 import type { ModelHistorySeries } from '../types'
@@ -81,6 +82,7 @@ export function UsageChart(props: {
     const text = resolvedTheme === 'dark' ? '#a3a3a3' : '#737373'
     return {
       type: 'line' as const,
+      background: 'transparent',
       data: [
         {
           id: 'usage',
@@ -131,6 +133,7 @@ export function UsageChart(props: {
       ],
       legends: { visible: false },
       tooltip: {
+        ...CHART_TOOLTIP,
         mark: {
           title: {
             value: (datum: Record<string, unknown>) => String(datum.label),
@@ -162,8 +165,9 @@ export function UsageChart(props: {
   ])
 
   return (
-    <section
-      className='glass-surface bg-muted/20 rounded-2xl px-4 py-5 sm:px-6'
+    <Card
+      role='region'
+      className='gap-0 rounded-2xl px-4 py-5 sm:px-6'
       aria-label={t('Usage trend')}
     >
       <div className='mb-5 flex flex-wrap items-center justify-between gap-3'>
@@ -240,6 +244,6 @@ export function UsageChart(props: {
           <VChart spec={spec} options={VCHART_OPTION} />
         )}
       </div>
-    </section>
+    </Card>
   )
 }

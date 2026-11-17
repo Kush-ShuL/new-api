@@ -34,10 +34,7 @@ import { staticDataTableClassNames } from './static-data-table-classnames'
 type StaticDataTableBaseProps = {
   className?: string
   tableClassName?: string
-  containerProps?: Omit<
-    React.ComponentProps<'div'>,
-    'className' | 'children'
-  > & { 'data-table-scroll-viewport'?: boolean }
+  containerProps?: Omit<React.ComponentProps<'div'>, 'className' | 'children'>
   tableProps?: Omit<
     React.ComponentProps<typeof Table>,
     'className' | 'children'
@@ -81,6 +78,7 @@ export function StaticDataTable<TData = unknown>(
 
   return (
     <div
+      data-slot='static-data-table'
       className={cn(staticDataTableClassNames.container, className)}
       {...containerProps}
     >

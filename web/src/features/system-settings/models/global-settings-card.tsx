@@ -37,6 +37,13 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
 
@@ -48,6 +55,8 @@ import {
 import { SettingsPageFormActions } from '../components/settings-page-context'
 import { SettingsSection } from '../components/settings-section'
 import { useUpdateOption } from '../hooks/use-update-option'
+import { responsesSummaryModelsSchema } from './responses-summary-schema'
+import { ResponsesSummaryModels } from './responses-summary-settings'
 
 const thinkingBlacklistExample = JSON.stringify(
   ['moonshotai/kimi-k2-thinking', 'kimi-k2-thinking', 're:.*@sha256:.*'],
@@ -90,6 +99,11 @@ const jsonString = z.string().refine((value) => {
 const schema = z.object({
   global: z.object({
     pass_through_request_enabled: z.boolean(),
+    responses_reasoning_encryption: z.boolean().default(true),
+    responses_reasoning_summary_mode: z
+      .enum(['match', 'model'])
+      .default('match'),
+    responses_reasoning_summary_models: responsesSummaryModelsSchema,
     thinking_model_blacklist: jsonString,
     chat_completions_to_responses_policy: jsonString,
   }),
@@ -104,6 +118,9 @@ type GlobalModelSettingsFormInput = z.input<typeof schema>
 
 type FlatGlobalModelSettings = {
   'global.pass_through_request_enabled': boolean
+  'global.responses_reasoning_encryption': boolean
+  'global.responses_reasoning_summary_mode': string
+  'global.responses_reasoning_summary_models': string
   'global.thinking_model_blacklist': string
   'global.chat_completions_to_responses_policy': string
   'general_setting.ping_interval_enabled': boolean
@@ -113,6 +130,13 @@ type FlatGlobalModelSettings = {
 const flattenGlobalValues = (
   values: GlobalModelSettingsFormValues
 ): FlatGlobalModelSettings => ({
+  'global.responses_reasoning_encryption':
+    values.global.responses_reasoning_encryption,
+  'global.responses_reasoning_summary_mode':
+    values.global.responses_reasoning_summary_mode,
+  'global.responses_reasoning_summary_models': JSON.stringify(
+    values.global.responses_reasoning_summary_models
+  ),
   'global.pass_through_request_enabled':
     values.global.pass_through_request_enabled,
   'global.thinking_model_blacklist': normalizeJsonText(
@@ -156,6 +180,7 @@ export function GlobalSettingsCard({ defaultValues }: GlobalSettingsCardProps) {
   }, [defaultValues, form])
 
   const pingEnabled = form.watch('general_setting.ping_interval_enabled')
+  const summaryMode = form.watch('global.responses_reasoning_summary_mode')
 
   const onSubmit = async (values: GlobalModelSettingsFormValues) => {
     const flattenedDefaults = flattenGlobalValues(defaultValues)
@@ -208,6 +233,81 @@ export function GlobalSettingsCard({ defaultValues }: GlobalSettingsCardProps) {
               </SettingsSwitchItem>
             )}
           />
+
+          <FormField
+            control={form.control}
+            name='global.responses_reasoning_encryption'
+            render={({ field }) => (
+              <SettingsSwitchItem>
+                <SettingsSwitchContent>
+                  <FormLabel>{t('Encrypt converted reasoning')}</FormLabel>
+                  <FormDescription>
+                    {t(
+                      'Return encrypted reasoning for converted Responses. When disabled, return the full reasoning in the summary.'
+                    )}
+                  </FormDescription>
+                </SettingsSwitchContent>
+                <FormControl>
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                </FormControl>
+              </SettingsSwitchItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name='global.responses_reasoning_summary_mode'
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{t('Reasoning summary mode')}</FormLabel>
+                <Select value={field.value} onValueChange={field.onChange}>
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue>
+                        {field.value === 'model'
+                          ? t('Generate with a model')
+                          : t('Match headings')}
+                      </SelectValue>
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value='match'>{t('Match headings')}</SelectItem>
+                    <SelectItem value='model'>
+                      {t('Generate with a model')}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                <FormDescription>
+                  {t(
+                    'Applies to encrypted converted reasoning. Summary detail follows reasoning.summary in the request.'
+                  )}
+                </FormDescription>
+              </FormItem>
+            )}
+          />
+          {summaryMode === 'model' && (
+            <FormField
+              control={form.control}
+              name='global.responses_reasoning_summary_models'
+              render={({ field }) => (
+                <FormItem>
+                  <ResponsesSummaryModels
+                    value={responsesSummaryModelsSchema.parse(field.value)}
+                    onChange={field.onChange}
+                  />
+                  <FormDescription>
+                    {t(
+                      'Summary calls use the selected channels and do not add to user charges. More detail covers more paragraphs with separate summaries.'
+                    )}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
 
           <FormField
             control={form.control}

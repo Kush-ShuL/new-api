@@ -153,6 +153,7 @@ import {
   FIELD_PLACEHOLDERS,
   MODEL_FETCHABLE_TYPES,
   OPENAI_FIELD_PASSTHROUGH_TYPES,
+  CHANNEL_TYPE_AGGREGATE,
 } from '../../constants'
 import { useChannelKeyDisclosure } from '../../hooks/use-channel-key-disclosure'
 import {
@@ -166,6 +167,7 @@ import {
 } from '../../hooks/use-redirect-panel-placement'
 import {
   CHANNEL_FORM_DEFAULT_VALUES,
+  buildAggregateConfig,
   CHANNEL_TYPE_ADVANCED_CUSTOM,
   channelFormSchema,
   channelsQueryKeys,
@@ -290,6 +292,11 @@ const SENSITIVE_FORM_FIELDS = [
   'settings',
   'setting',
   'advanced_custom',
+  'aggregate_chat_path',
+  'aggregate_messages_path',
+  'aggregate_responses_path',
+  'aggregate_models_path',
+  'aggregate_websocket',
   'is_enterprise_account',
   'vertex_key_type',
   'vertex_project_id',
@@ -304,7 +311,7 @@ const SENSITIVE_FORM_FIELDS = [
   'http2_connection_shards',
   'tls_insecure_skip_verify',
   'pass_through_body_enabled',
-  'responses_websocket_enabled',
+  'responses_websocket_mode',
   'system_prompt',
   'system_prompt_override',
   'allow_service_tier',
@@ -605,6 +612,23 @@ export function ChannelMutateDrawer({
     formValues.upstream_model_update_check_enabled
   const currentSettings = formValues.settings
   const currentAdvancedCustom = formValues.advanced_custom
+  const currentAggregate = useMemo(
+    () =>
+      buildAggregateConfig({
+        aggregate_chat_path: formValues.aggregate_chat_path,
+        aggregate_messages_path: formValues.aggregate_messages_path,
+        aggregate_responses_path: formValues.aggregate_responses_path,
+        aggregate_models_path: formValues.aggregate_models_path,
+        aggregate_websocket: formValues.aggregate_websocket,
+      }),
+    [
+      formValues.aggregate_chat_path,
+      formValues.aggregate_messages_path,
+      formValues.aggregate_responses_path,
+      formValues.aggregate_models_path,
+      formValues.aggregate_websocket,
+    ]
+  )
   const currentHeaderOverride = formValues.header_override
   const currentProxy = formValues.proxy
   const currentHttpProtocol = formValues.http_protocol
@@ -1200,7 +1224,10 @@ export function ChannelMutateDrawer({
   // preview path, which reuses the saved credential on the server.
   const previewModels =
     !isEditing ||
-    (currentType === CHANNEL_TYPE_ADVANCED_CUSTOM && canEditSensitive)
+    ([CHANNEL_TYPE_ADVANCED_CUSTOM, CHANNEL_TYPE_AGGREGATE].includes(
+      currentType
+    ) &&
+      canEditSensitive)
   const canDiscoverModels = previewModels ? canEditSensitive : canOperateChannel
   const previewKey = isEditing ? undefined : currentKey
   const previewRequest = useMemo<ChannelModelDiscoveryRequest>(
@@ -1212,6 +1239,8 @@ export function ChannelMutateDrawer({
         channel_id: isEditing ? channelId || undefined : undefined,
         base_url: currentBaseUrl || '',
         advanced_custom: currentAdvancedCustom,
+        aggregate:
+          currentType === CHANNEL_TYPE_AGGREGATE ? currentAggregate : undefined,
         header_override: currentHeaderOverride,
         proxy: currentProxy,
       },
@@ -1223,6 +1252,7 @@ export function ChannelMutateDrawer({
       channelId,
       currentBaseUrl,
       currentAdvancedCustom,
+      currentAggregate,
       currentHeaderOverride,
       currentProxy,
     ]
@@ -4300,6 +4330,69 @@ export function ChannelMutateDrawer({
                   </FormItem>
                 )}
               />
+            )}
+
+            {currentType === CHANNEL_TYPE_AGGREGATE && (
+              <div className='space-y-4'>
+                <p className='text-muted-foreground text-sm'>
+                  {t(
+                    'All endpoints share one API key and the same model list. Leave an unavailable protocol empty.'
+                  )}
+                </p>
+                {(
+                  [
+                    [
+                      'aggregate_chat_path',
+                      'Chat Completions',
+                      '/v1/chat/completions',
+                    ],
+                    ['aggregate_messages_path', 'Messages API', '/v1/messages'],
+                    [
+                      'aggregate_responses_path',
+                      'Responses API',
+                      '/v1/responses',
+                    ],
+                    ['aggregate_models_path', 'Model list', '/v1/models'],
+                  ] as const
+                ).map(([name, label, placeholder]) => (
+                  <FormField
+                    key={name}
+                    control={form.control}
+                    name={name}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t(label)}</FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            value={field.value || ''}
+                            placeholder={placeholder}
+                            disabled={sensitiveLocked}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                ))}
+                <FormField
+                  control={form.control}
+                  name='aggregate_websocket'
+                  render={({ field }) => (
+                    <FormItem className='flex items-center justify-between gap-4'>
+                      <FormLabel>{t('Native Responses WebSocket')}</FormLabel>
+                      <FormControl>
+                        <Switch
+                          checked={field.value === true}
+                          onCheckedChange={field.onChange}
+                          disabled={sensitiveLocked}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
             )}
 
             {currentType === CHANNEL_TYPE_ADVANCED_CUSTOM && (

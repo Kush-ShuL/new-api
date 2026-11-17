@@ -34,12 +34,34 @@ For commercial licensing, please contact support@quantumnous.com
   object-fit: cover;
 }
 .model-card-mask {
-  background: linear-gradient(180deg, #050b14a8, #050b14e3 85%);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--background) 58%, transparent),
+    color-mix(in srgb, var(--background) 90%, transparent)
+  );
 }
 .model-card-with-background {
-  --foreground: #f4f7fa;
-  --muted-foreground: #d4dce6;
   color: var(--foreground);
+}
+html[data-glass-ui] .model-catalog-card {
+  backdrop-filter: none;
+}
+html[data-glass-ui] .model-catalog-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  backdrop-filter: blur(var(--glass-blur, 20px)) saturate(120%);
+}
+html[data-glass-ui] .model-card-mask {
+  background: color-mix(
+    in srgb,
+    var(--background) var(--glass-opacity, 85%),
+    transparent
+  );
+  backdrop-filter: blur(calc(var(--glass-blur, 20px) * 0.3)) saturate(120%);
 }
 .model-details-artwork {
   width: 100%;

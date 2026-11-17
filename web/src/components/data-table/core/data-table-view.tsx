@@ -19,13 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import type { Row, Table as TanstackTable } from '@tanstack/react-table'
 import * as React from 'react'
 
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableRow,
-  updateTableScrollClip,
-} from '@/components/ui/table'
+import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table'
 import { cn } from '@/lib/utils'
 
 import {
@@ -36,6 +30,7 @@ import { DataTableColgroup } from './data-table-colgroup'
 import { DataTableHeader } from './data-table-header'
 import { DataTableRow } from './data-table-row'
 import { TableEmpty } from './table-empty'
+import { TableScrollArea } from './table-scroll-area'
 import { getTableSizeStyle } from './table-sizing'
 import { TableSkeleton } from './table-skeleton'
 import type {
@@ -67,6 +62,7 @@ export function DataTableView<TData>(props: DataTableViewProps<TData>) {
 
   return (
     <div
+      data-slot='data-table-frame'
       className={cn(
         'isolate overflow-hidden rounded-lg border',
         props.containerClassName
@@ -106,8 +102,12 @@ function UnifiedTableView<TData>({
   const tableSizing = getTableSizing(props)
 
   return (
-    <div className={props.tableContainerClassName}>
-      <Table className={props.tableClassName} style={tableSizing.style}>
+    <TableScrollArea className={props.tableContainerClassName}>
+      <Table
+        withContainer={false}
+        className={props.tableClassName}
+        style={tableSizing.style}
+      >
         {tableSizing.colgroup}
         <DataTableHeader
           table={props.table}
@@ -118,7 +118,7 @@ function UnifiedTableView<TData>({
         />
         {renderTableBody(props, rows, colSpan, getColumnClassName)}
       </Table>
-    </div>
+    </TableScrollArea>
   )
 }
 
@@ -142,13 +142,9 @@ function SplitHeaderTableView<TData>({
         props.tableContainerClassName
       )}
     >
-      <div
-        data-table-scroll-viewport
-        onScroll={updateTableScrollClip}
+      <TableScrollArea
         className={cn(
           'min-h-0 flex-1 overflow-auto',
-          '**:data-[slot=table-header]:[--table-header-bg:var(--table-header)]',
-          '**:data-[slot=table-header]:bg-(--table-header-bg)',
           props.splitHeaderScrollClassName,
           props.bodyContainerClassName
         )}
@@ -162,13 +158,13 @@ function SplitHeaderTableView<TData>({
           <DataTableHeader
             table={props.table}
             applyHeaderSize={props.applyHeaderSize}
-            className={cn('sticky top-0 z-20', props.tableHeaderClassName)}
+            className={props.tableHeaderClassName}
             rowClassName={props.tableHeaderRowClassName}
             getColumnClassName={getColumnClassName}
           />
           {renderTableBody(props, rows, colSpan, getColumnClassName)}
         </Table>
-      </div>
+      </TableScrollArea>
     </div>
   )
 }

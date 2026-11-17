@@ -606,6 +606,13 @@ export async function fetchModels(data: {
   key?: string
   channel_id?: number
   advanced_custom?: string
+  aggregate?: {
+    chat_path?: string
+    messages_path?: string
+    responses_path?: string
+    models_path?: string
+    websocket: boolean
+  }
   header_override?: string
   proxy?: string
 }): Promise<FetchModelsResponse> {

@@ -25,7 +25,7 @@ import {
   type QuotaTypeOption,
   type SortOption,
 } from '../constants'
-import type { PricingModel } from '../types'
+import type { ModelCapabilityFilters, PricingModel } from '../types'
 import { compileBillingExpression } from './billing-expression/parser'
 import { visitExpression } from './billing-expression/types'
 import {
@@ -139,6 +139,24 @@ export function filterByEndpointType(
   )
 }
 
+export function filterByCapabilities(
+  models: PricingModel[],
+  filters: ModelCapabilityFilters
+): PricingModel[] {
+  return models.filter(
+    (model) =>
+      (filters.modelType === FILTER_ALL ||
+        model.model_type === filters.modelType) &&
+      filters.inputModalities.every((modality) =>
+        model.input_modalities?.some((value) => value === modality)
+      ) &&
+      filters.outputModalities.every((modality) =>
+        model.output_modalities?.some((value) => value === modality)
+      ) &&
+      (!filters.minContext || (model.context_length ?? 0) >= filters.minContext)
+  )
+}
+
 type SortPriceKind = 'input' | 'output' | 'request'
 
 const PRICE_SORTS: Partial<
@@ -237,6 +255,7 @@ export function filterAndSortModels(
     endpointType: string
     tag: string
     sortBy: string
+    capabilities?: ModelCapabilityFilters
   }
 ): PricingModel[] {
   let result = filterBySearch(models, filters.search)
@@ -245,6 +264,9 @@ export function filterAndSortModels(
   result = filterByQuotaType(result, filters.quotaType)
   result = filterByEndpointType(result, filters.endpointType)
   result = filterByTag(result, filters.tag)
+  if (filters.capabilities) {
+    result = filterByCapabilities(result, filters.capabilities)
+  }
   result = sortModels(result, filters.sortBy)
 
   return result

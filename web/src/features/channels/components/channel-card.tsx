@@ -92,7 +92,7 @@ function ChannelCardComponent({
         className='flex h-full min-w-0 flex-col gap-3'
       >
         {/* Row 1: selection + type, with status badge + actions menu */}
-        <div className='flex items-center justify-between gap-2'>
+        <div className='flex min-h-8 items-center justify-between gap-3'>
           <div className='flex min-w-0 flex-1 items-center gap-2'>
             {reorderCell}
             {!isTagRow && selectCell && (
@@ -108,7 +108,7 @@ function ChannelCardComponent({
         {/* Both rows share their columns: identity/balance on the left,
           priority/response and weight/last tested on the right. */}
         <StatusBadgeTypeContext.Provider value='text'>
-          <div className='grid grid-cols-[minmax(0,1fr)_auto_auto] items-start gap-3'>
+          <div className='grid grid-cols-[minmax(0,1fr)_auto_auto] items-start gap-x-4 gap-y-4'>
             <div className='min-w-0 overflow-hidden text-sm'>
               {!isTagRow && (
                 <div className={labelClass}>
@@ -156,7 +156,7 @@ function ChannelCardComponent({
         </StatusBadgeTypeContext.Provider>
 
         {/* Groups retain their compact, full-width footer. */}
-        <div className='mt-auto flex min-w-0 flex-wrap items-center justify-between gap-2 pt-1'>
+        <div className='mt-auto flex min-w-0 flex-wrap items-center justify-between gap-3 pt-2'>
           {groups.length > 0 ? (
             <div className='-ml-1.5 flex min-w-0 flex-wrap gap-1'>
               {groups.map((g) => (

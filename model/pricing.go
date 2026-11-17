@@ -44,6 +44,11 @@ type Pricing struct {
 	AudioCompletionRatio   *float64                             `json:"audio_completion_ratio,omitempty"`
 	EnableGroup            []string                             `json:"enable_groups"`
 	SupportedEndpointTypes []constant.EndpointType              `json:"supported_endpoint_types"`
+	EndpointPolicy         *ModelEndpointPolicy                 `json:"endpoint_policy,omitempty"`
+	ModelType              string                               `json:"model_type,omitempty"`
+	ContextLength          int                                  `json:"context_length,omitempty"`
+	InputModalities        []string                             `json:"input_modalities,omitempty"`
+	OutputModalities       []string                             `json:"output_modalities,omitempty"`
 	BillingMode            string                               `json:"billing_mode,omitempty"`
 	BillingExpr            string                               `json:"billing_expr,omitempty"`
 	BillingUsageSchema     map[string]jsplugin.UsageFieldSchema `json:"billing_usage_schema,omitempty"`
@@ -123,7 +128,7 @@ func GetModelSupportEndpointTypes(model string) []constant.EndpointType {
 }
 
 func getPricingEndpointTypesForAbility(ability AbilityWithChannel, advancedCustomConfigs map[int]*dto.AdvancedCustomConfig) []constant.EndpointType {
-	if ability.ChannelType != constant.ChannelTypeAdvancedCustom {
+	if !constant.IsAdvancedCustomChannel(ability.ChannelType) {
 		return common.GetEndpointTypesByChannelType(ability.ChannelType, ability.Model)
 	}
 	if config := advancedCustomConfigs[ability.ChannelId]; config != nil {
@@ -144,7 +149,7 @@ func loadPricingAdvancedCustomConfigs(enableAbilities []AbilityWithChannel) map[
 	channelIDs := make([]int, 0)
 	seen := make(map[int]struct{})
 	for _, ability := range enableAbilities {
-		if ability.ChannelType != constant.ChannelTypeAdvancedCustom {
+		if !constant.IsAdvancedCustomChannel(ability.ChannelType) {
 			continue
 		}
 		if _, exists := seen[ability.ChannelId]; exists {
@@ -175,7 +180,7 @@ func loadPricingAdvancedCustomConfigs(enableAbilities []AbilityWithChannel) map[
 			common.SysLog(common.LogText("load advanced custom channel settings error: channel_id=%d, error=%v", channelID, err))
 			continue
 		}
-		if channel.Type != constant.ChannelTypeAdvancedCustom {
+		if !constant.IsAdvancedCustomChannel(channel.Type) {
 			continue
 		}
 		if config := channel.GetOtherSettings().AdvancedCustom; config != nil {
@@ -242,6 +247,30 @@ func updatePricing() {
 	for _, ability := range enableAbilities {
 		endpoints := modelSupportEndpointsStr[ability.Model]
 		channelTypes := getPricingEndpointTypesForAbility(ability, advancedCustomConfigs)
+		kind, _, _ := metaMap[ability.Model].EffectiveCapabilities(ability.Model)
+		if kind == "chat" || kind == "" {
+			apiType, _ := common.ChannelType2APIType(ability.ChannelType)
+			switch apiType {
+			case constant.APITypeOpenAI, constant.APITypeAnthropic, constant.APITypeGemini,
+				constant.APITypeAws, constant.APITypeVertexAi, constant.APITypeCloudflare,
+				constant.APITypeNewAPI, constant.APITypeSub2API, constant.APITypeCodex:
+				channelTypes = slices.Clone(channelTypes)
+				for _, endpoint := range []constant.EndpointType{constant.EndpointTypeOpenAI, constant.EndpointTypeAnthropic, constant.EndpointTypeGemini, constant.EndpointTypeOpenAIResponse} {
+					if !slices.Contains(channelTypes, endpoint) {
+						channelTypes = append(channelTypes, endpoint)
+					}
+				}
+			}
+		} else {
+			switch kind {
+			case "image":
+				channelTypes = []constant.EndpointType{constant.EndpointTypeImageGeneration}
+			case "embedding":
+				channelTypes = []constant.EndpointType{constant.EndpointTypeEmbeddings}
+			case "rerank":
+				channelTypes = []constant.EndpointType{constant.EndpointTypeJinaRerank}
+			}
+		}
 		for _, channelType := range channelTypes {
 			if !common.StringsContains(endpoints, string(channelType)) {
 				endpoints = append(endpoints, string(channelType))
@@ -250,17 +279,23 @@ func updatePricing() {
 		modelSupportEndpointsStr[ability.Model] = endpoints
 	}
 
-	// Explicit metadata endpoints define the accepted protocols. Channel
-	// inference is used only when no endpoints have been configured.
+	// Apply the model policy after collecting channel capabilities.
 	modelEndpointPolicies = metaMap
 	modelEndpointMetadata = allMeta
+	endpointPolicies := make(map[string]*ModelEndpointPolicy)
 	for modelName, meta := range metaMap {
-		endpoints, err := declaredEndpointNames(meta.Endpoints)
-		if err != nil || len(endpoints) == 0 {
+		policy, err := ParseModelEndpointPolicy(meta.Endpoints)
+		if err != nil || policy == nil {
 			continue
 		}
-		slices.Sort(endpoints)
-		modelSupportEndpointsStr[modelName] = slices.Compact(endpoints)
+		endpointPolicies[modelName] = policy
+		if policy.Mode == "whitelist" {
+			modelSupportEndpointsStr[modelName] = policy.Endpoints
+			continue
+		}
+		modelSupportEndpointsStr[modelName] = slices.DeleteFunc(modelSupportEndpointsStr[modelName], func(endpoint string) bool {
+			return slices.Contains(policy.Endpoints, endpoint)
+		})
 	}
 
 	modelSupportEndpointTypes = make(map[string][]constant.EndpointType)
@@ -286,29 +321,12 @@ func updatePricing() {
 		}
 	}
 	// 2. 自定义端点（models 表）覆盖默认
-	for _, meta := range metaMap {
-		if strings.TrimSpace(meta.Endpoints) == "" {
+	for _, policy := range endpointPolicies {
+		if policy.Mode == "blacklist" {
 			continue
 		}
-		var raw map[string]any
-		if err := common.Unmarshal([]byte(meta.Endpoints), &raw); err == nil {
-			for k, v := range raw {
-				switch val := v.(type) {
-				case string:
-					supportedEndpointMap[k] = common.EndpointInfo{Path: val, Method: "POST"}
-				case map[string]any:
-					ep := common.EndpointInfo{Method: "POST"}
-					if p, ok := val["path"].(string); ok {
-						ep.Path = p
-					}
-					if m, ok := val["method"].(string); ok {
-						ep.Method = strings.ToUpper(m)
-					}
-					supportedEndpointMap[k] = ep
-				default:
-					// ignore unsupported types
-				}
-			}
+		for name, info := range policy.Paths {
+			supportedEndpointMap[name] = info
 		}
 	}
 
@@ -319,6 +337,7 @@ func updatePricing() {
 			ModelName:              model,
 			EnableGroup:            groups.Items(),
 			SupportedEndpointTypes: modelSupportEndpointTypes[model],
+			EndpointPolicy:         endpointPolicies[model],
 		}
 
 		// 补充模型元数据（描述、标签、供应商、状态）
@@ -331,6 +350,8 @@ func updatePricing() {
 			pricing.Icon = meta.Icon
 			pricing.Tags = meta.Tags
 			pricing.VendorID = meta.VendorID
+			pricing.ModelType, pricing.InputModalities, pricing.OutputModalities = meta.EffectiveCapabilities(model)
+			pricing.ContextLength = meta.ContextLength
 		}
 		modelPrice, findPrice := ratio_setting.GetModelPrice(model, false)
 		if findPrice {

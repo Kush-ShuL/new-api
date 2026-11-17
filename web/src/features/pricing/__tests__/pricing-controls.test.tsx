@@ -25,7 +25,7 @@ import {
   PricingToolbar,
   type PricingToolbarProps,
 } from '../components/pricing-toolbar'
-import { filterByQuotaType } from '../lib/filters'
+import { filterByCapabilities, filterByQuotaType } from '../lib/filters'
 import type { PricingModel } from '../types'
 
 function toolbarProps(): PricingToolbarProps {
@@ -41,6 +41,13 @@ function toolbarProps(): PricingToolbarProps {
     vendorFilter: 'all',
     groupFilter: 'all',
     tagFilter: 'all',
+    capabilityFilters: {
+      modelType: 'all',
+      inputModalities: [],
+      outputModalities: [],
+      minContext: 0,
+    },
+    onCapabilityFiltersChange: vi.fn(),
     onSortChange: vi.fn(),
     onTokenUnitChange: vi.fn(),
     onRechargePriceChange: vi.fn(),
@@ -62,6 +69,134 @@ function toolbarProps(): PricingToolbarProps {
 }
 
 describe('pricing controls', () => {
+  it('combines model type, input/output modalities and minimum context without including unconfigured models', () => {
+    const base = {
+      id: 1,
+      model_name: 'multimodal',
+      model_ratio: 1,
+      completion_ratio: 1,
+      quota_type: 0,
+      enable_groups: ['default'],
+    }
+    const models: PricingModel[] = [
+      {
+        ...base,
+        model_type: 'chat',
+        input_modalities: ['text', 'image'],
+        output_modalities: ['text', 'audio'],
+        context_length: 131072,
+      },
+      {
+        ...base,
+        id: 2,
+        model_name: 'text-only',
+        model_type: 'chat',
+        input_modalities: ['text'],
+        output_modalities: ['text'],
+        context_length: 131072,
+      },
+      {
+        ...base,
+        id: 3,
+        model_name: 'embedding',
+        model_type: 'embedding',
+        input_modalities: ['text'],
+        output_modalities: ['embedding'],
+        context_length: 131072,
+      },
+      { ...base, id: 4, model_name: 'unconfigured' },
+      {
+        ...base,
+        id: 5,
+        model_name: 'text-output-only',
+        model_type: 'chat',
+        input_modalities: ['text', 'image'],
+        output_modalities: ['text'],
+        context_length: 131072,
+      },
+    ]
+    const filters = {
+      modelType: 'chat',
+      inputModalities: ['text', 'image'],
+      outputModalities: ['text', 'audio'],
+      minContext: 131072,
+    }
+    expect(
+      filterByCapabilities(models, filters).map((model) => model.model_name)
+    ).toEqual(['multimodal'])
+    expect(
+      filterByCapabilities(models, { ...filters, minContext: 262144 })
+    ).toEqual([])
+    expect(
+      filterByCapabilities(models, {
+        modelType: 'all',
+        inputModalities: [],
+        outputModalities: [],
+        minContext: 0,
+      })
+    ).toEqual(models)
+  })
+
+  it('selects multiple modality icons independently and lets users deselect them', async () => {
+    const user = userEvent.setup()
+    const props = toolbarProps()
+    const { rerender } = render(<PricingSidebar {...props} />)
+    const inputText = screen.getByRole('button', { name: 'Input: Text' })
+    await user.click(inputText)
+    expect(props.onCapabilityFiltersChange).toHaveBeenLastCalledWith({
+      inputModalities: ['text'],
+    })
+    props.capabilityFilters = {
+      ...props.capabilityFilters,
+      inputModalities: ['text'],
+    }
+    rerender(<PricingSidebar {...props} />)
+    expect(inputText).toHaveAttribute('aria-pressed', 'true')
+    await user.click(screen.getByRole('button', { name: 'Input: Image' }))
+    expect(props.onCapabilityFiltersChange).toHaveBeenLastCalledWith({
+      inputModalities: ['text', 'image'],
+    })
+    props.capabilityFilters = {
+      ...props.capabilityFilters,
+      inputModalities: ['text', 'image'],
+      outputModalities: ['text'],
+    }
+    rerender(<PricingSidebar {...props} />)
+    expect(
+      screen.getByRole('button', { name: 'Input: Image' })
+    ).toHaveAttribute('aria-pressed', 'true')
+    await user.click(screen.getByRole('button', { name: 'Output: Audio' }))
+    expect(props.onCapabilityFiltersChange).toHaveBeenLastCalledWith({
+      outputModalities: ['text', 'audio'],
+    })
+    await user.click(inputText)
+    expect(props.onCapabilityFiltersChange).toHaveBeenLastCalledWith({
+      inputModalities: ['image'],
+    })
+  })
+
+  it('lets users filter by structured capabilities from the sidebar', async () => {
+    const user = userEvent.setup()
+    const props = toolbarProps()
+    render(<PricingSidebar {...props} />)
+    await user.click(screen.getByRole('button', { name: '≥ 128K' }))
+    expect(props.onCapabilityFiltersChange).toHaveBeenLastCalledWith({
+      minContext: 131072,
+    })
+    const section = screen
+      .getByText('Model type')
+      .closest('[data-slot="collapsible"]')
+    expect(section).not.toBeNull()
+    await user.click(
+      within(section as HTMLElement).getByRole('button', {
+        name: /^Embeddings/,
+      })
+    )
+    expect(props.onCapabilityFiltersChange).toHaveBeenLastCalledWith({
+      modelType: 'embedding',
+    })
+  })
+
   it.each<{
     name: string
     pricing: Partial<PricingModel>

@@ -33,7 +33,6 @@ import {
   getHeaderPassthroughState,
   setHeaderPassthrough,
 } from '../lib/header-passthrough'
-import { supportsResponsesWebSocket } from '../lib/responses-websocket'
 import type { PassthroughKind } from './dialogs/passthrough-warning-dialog'
 
 type ChannelQuickOptionsProps = {
@@ -69,23 +68,18 @@ export function ChannelQuickOptions(props: ChannelQuickOptionsProps) {
   const id = useId()
   const formContext = useFormContext<ChannelFormValues>()
   const form = props.form ?? formContext
-  const [passthrough, headerOverride, autoBan, modelCheck, websocket] =
-    useWatch({
-      control: form.control,
-      name: [
-        'pass_through_body_enabled',
-        'header_override',
-        'auto_ban',
-        'upstream_model_update_check_enabled',
-        'responses_websocket_enabled',
-      ],
-    })
+  const [passthrough, headerOverride, autoBan, modelCheck] = useWatch({
+    control: form.control,
+    name: [
+      'pass_through_body_enabled',
+      'header_override',
+      'auto_ban',
+      'upstream_model_update_check_enabled',
+    ],
+  })
   const sensitiveDisabled = props.sensitiveLocked || props.disabled
   const setOption = (
-    name:
-      | 'pass_through_body_enabled'
-      | 'upstream_model_update_check_enabled'
-      | 'responses_websocket_enabled',
+    name: 'pass_through_body_enabled' | 'upstream_model_update_check_enabled',
     value: boolean
   ) => form.setValue(name, value, { shouldDirty: true, shouldValidate: true })
   // The header switch is a shortcut for the "*" rule in Request Header
@@ -160,17 +154,6 @@ export function ChannelQuickOptions(props: ChannelQuickOptionsProps) {
       checked: modelCheck === true,
       onCheckedChange: (value) =>
         setOption('upstream_model_update_check_enabled', value),
-      disabled: sensitiveDisabled,
-    })
-  }
-  if (supportsResponsesWebSocket(props.channelType)) {
-    options.push({
-      key: 'websocket',
-      label: t('Responses WebSocket'),
-      description: t('Requires upstream WebSocket support'),
-      checked: websocket === true,
-      onCheckedChange: (value) =>
-        setOption('responses_websocket_enabled', value),
       disabled: sensitiveDisabled,
     })
   }

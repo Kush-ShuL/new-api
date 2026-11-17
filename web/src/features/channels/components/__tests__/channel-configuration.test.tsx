@@ -1143,7 +1143,7 @@ test('model discovery reports failures inline and allows an empty result to fall
 test('quick options and detailed settings share changes across tabs and save the same configuration', async () => {
   editingChannel.setting = JSON.stringify({
     pass_through_body_enabled: true,
-    responses_websocket_enabled: true,
+    responses_websocket_mode: 'passthrough',
   })
   editingChannel.settings = JSON.stringify({
     upstream_model_update_check_enabled: true,
@@ -1157,11 +1157,7 @@ test('quick options and detailed settings share changes across tabs and save the
   render(<ConfigurationHarness currentRow={editingChannel} />)
   await screen.findByDisplayValue('Existing channel')
   const quick = within(screen.getByRole('group', { name: 'Quick options' }))
-  for (const name of [
-    'Pass Through Body',
-    'Detect model updates',
-    'Responses WebSocket',
-  ]) {
+  for (const name of ['Pass Through Body', 'Detect model updates']) {
     const toggle = quick.getByRole('switch', { name })
     expect(toggle).toBeChecked()
     toggle.focus()
@@ -1171,9 +1167,8 @@ test('quick options and detailed settings share changes across tabs and save the
   await user.click(quick.getByRole('switch', { name: 'Auto-disable channel' }))
 
   await user.click(screen.getByRole('tab', { name: /Request & Response/ }))
-  expect(
-    screen.getByRole('switch', { name: 'Enable Responses WebSocket' })
-  ).not.toBeChecked()
+  expect(screen.getByRole('radio', { name: 'Passthrough' })).toBeChecked()
+  await user.click(screen.getByRole('radio', { name: 'HTTP bridge' }))
   const passthrough = screen.getByRole('switch', { name: 'Pass Through Body' })
   expect(passthrough).not.toBeChecked()
   await user.click(passthrough)
@@ -1211,9 +1206,6 @@ test('quick options and detailed settings share changes across tabs and save the
   expect(
     quick.getByRole('switch', { name: 'Auto-disable channel' })
   ).not.toBeChecked()
-  expect(
-    quick.getByRole('switch', { name: 'Responses WebSocket' })
-  ).not.toBeChecked()
   await user.click(screen.getByRole('button', { name: 'Update Channel' }))
   await waitFor(() => expect(put).toHaveBeenCalled())
   const payload = put.mock.calls[0]?.[1] as {
@@ -1224,7 +1216,7 @@ test('quick options and detailed settings share changes across tabs and save the
   expect(payload.auto_ban).toBe(0)
   expect(JSON.parse(payload.setting)).toMatchObject({
     pass_through_body_enabled: true,
-    responses_websocket_enabled: false,
+    responses_websocket_mode: 'http_bridge',
   })
   expect(JSON.parse(payload.settings)).toMatchObject({
     upstream_model_update_check_enabled: true,
@@ -1333,7 +1325,7 @@ test('quick options show only applicable shortcuts when the provider changes', a
   render(<ConfigurationHarness />)
   await user.click(screen.getByRole('option', { name: 'OpenAI Built-in #1' }))
   let quick = within(screen.getByRole('group', { name: 'Quick options' }))
-  expect(quick.getAllByRole('switch')).toHaveLength(5)
+  expect(quick.getAllByRole('switch')).toHaveLength(4)
   expect(
     quick.queryByRole('switch', { name: 'Force Format' })
   ).not.toBeInTheDocument()
@@ -1602,12 +1594,12 @@ test('request processing configuration does not mark the network category as con
 })
 
 test.each([1, 57, 58, 59, 60])(
-  'provider %s marks a saved Responses WebSocket setting in Request & Response and clears the mark when disabled',
+  'provider %s marks a custom Responses transport and clears the mark for HTTP bridge',
   async (type) => {
     editingChannel = {
       ...editingChannel,
       type,
-      setting: '{"responses_websocket_enabled":true}',
+      setting: '{"responses_websocket_mode":"passthrough"}',
     }
     const user = userEvent.setup()
     render(<ConfigurationHarness currentRow={editingChannel} />)
@@ -1618,11 +1610,11 @@ test.each([1, 57, 58, 59, 60])(
       screen.getByRole('tab', { name: /Other Settings/ })
     ).not.toHaveAccessibleName(/Configured/)
     await user.click(requestTab)
-    const toggle = screen.getByRole('switch', {
-      name: 'Enable Responses WebSocket',
+    const toggle = screen.getByRole('radio', {
+      name: 'Passthrough',
     })
     expect(toggle).toBeChecked()
-    await user.click(toggle)
+    await user.click(screen.getByRole('radio', { name: 'HTTP bridge' }))
     expect(toggle).not.toBeChecked()
     expect(requestTab).not.toHaveAccessibleName(/Configured/)
   }
@@ -1632,24 +1624,18 @@ test.each([
   [58, true],
   [1, false],
 ])(
-  'provider %s explains the native-route limit under the Responses WebSocket toggle: %s',
-  async (type, shown) => {
+  'provider %s offers HTTP bridge alongside native WebSocket transports: %s',
+  async (type, _shown) => {
     editingChannel = { ...editingChannel, type }
     const user = userEvent.setup()
     render(<ConfigurationHarness currentRow={editingChannel} />)
     await screen.findByDisplayValue('Existing channel')
     await user.click(screen.getByRole('tab', { name: /Request & Response/ }))
-    expect(
-      screen.getByRole('switch', { name: 'Enable Responses WebSocket' })
-    ).toBeVisible()
+    expect(screen.getByRole('radio', { name: 'HTTP bridge' })).toBeVisible()
     const note = screen.queryByText(
       /applies only to \/v1\/responses routes without protocol conversion/
     )
-    if (shown) {
-      expect(note).toBeVisible()
-    } else {
-      expect(note).not.toBeInTheDocument()
-    }
+    expect(note).not.toBeInTheDocument()
   }
 )
 
@@ -1658,7 +1644,7 @@ test('configuration from fields unsupported by the selected provider stays unmar
     ...editingChannel,
     type: 61,
     setting:
-      '{"task_plugin_key":"video-a","force_format":true,"responses_websocket_enabled":true}',
+      '{"task_plugin_key":"video-a","force_format":true,"responses_websocket_mode":"passthrough"}',
     settings:
       '{"allow_speed":true,"allow_service_tier":true,"upstream_model_update_check_enabled":true,"ollama_openai_chat":true}',
   }
@@ -2111,11 +2097,7 @@ test('an operator without sensitive write permission can discover saved models a
   expect(screen.getByRole('button', { name: 'Change provider' })).toBeDisabled()
   expect(screen.getByLabelText('API Key *')).toBeDisabled()
   const quick = within(screen.getByRole('group', { name: 'Quick options' }))
-  for (const name of [
-    'Pass Through Body',
-    'Detect model updates',
-    'Responses WebSocket',
-  ]) {
+  for (const name of ['Pass Through Body', 'Detect model updates']) {
     const toggle = quick.getByRole('switch', { name })
     expect(toggle).toHaveAttribute('aria-disabled', 'true')
     await user.click(toggle)
@@ -2769,7 +2751,7 @@ test('on wide screens the quick options move into the header as a compact toggle
   await screen.findByDisplayValue('Existing channel')
   const quick = screen.getByRole('group', { name: 'Quick options' })
   expect(quick.closest('[data-slot="sheet-header"]')).not.toBeNull()
-  expect(within(quick).getAllByRole('switch')).toHaveLength(5)
+  expect(within(quick).getAllByRole('switch')).toHaveLength(4)
   // Second header row: status badge and description on the left, toggles right.
   const statusRow = quick.parentElement
   if (!statusRow) throw new Error('status row missing')

@@ -74,12 +74,85 @@ func TestNormalizeResponsesWSMaxOutputTokens(t *testing.T) {
 	}
 }
 
+func TestResponsesWSPoolReusesContextAndIsolatesCredentials(t *testing.T) {
+	upgrader := websocket.Upgrader{}
+	peers := make(chan *websocket.Conn, 8)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err == nil {
+			peers <- conn
+		}
+	}))
+	t.Cleanup(func() {
+		server.Close()
+		close(peers)
+		for peer := range peers {
+			_ = peer.Close()
+		}
+	})
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest(http.MethodGet, "/v1/responses", nil)
+	common.SetContextKey(c, constant.ContextKeyUserId, 1)
+	common.SetContextKey(c, constant.ContextKeyTokenId, 2)
+	info := &relaycommon.RelayInfo{RelayMode: relayconstant.RelayModeResponses, RequestURLPath: "/v1/responses", UsingGroup: "default",
+		ChannelMeta: &relaycommon.ChannelMeta{ChannelId: 90001, ChannelType: constant.ChannelTypeOpenAI, ChannelBaseUrl: server.URL, ApiKey: "test-key", UpstreamModelName: "pool-model"}}
+	adaptor := GetAdaptor(constant.APITypeOpenAI)
+	adaptor.Init(info)
+	first, err := acquireResponsesConnection(c, adaptor, info, "")
+	require.NoError(t, err)
+	t.Cleanup(func() { first.entry.close() })
+	peer := <-peers
+	require.NoError(t, peer.WriteMessage(websocket.TextMessage, []byte(`{"type":"response.completed"}`)))
+	select {
+	case event := <-first.events:
+		require.NoError(t, event.err)
+		assert.JSONEq(t, `{"type":"response.completed"}`, string(event.body))
+	case <-time.After(5 * time.Second):
+		t.Fatal("pooled reader did not deliver the event")
+	}
+	first.release(true, "resp_first")
+	reused, err := acquireResponsesConnection(c, adaptor, info, "resp_first")
+	require.NoError(t, err)
+	assert.Same(t, first.entry, reused.entry)
+	assert.True(t, reused.reusedContext)
+	reused.release(true, "resp_second")
+	for _, change := range []string{"user", "token", "key"} {
+		t.Run(change, func(t *testing.T) {
+			common.SetContextKey(c, constant.ContextKeyUserId, 1)
+			common.SetContextKey(c, constant.ContextKeyTokenId, 2)
+			info.ApiKey = "test-key"
+			switch change {
+			case "user":
+				common.SetContextKey(c, constant.ContextKeyUserId, 3)
+			case "token":
+				common.SetContextKey(c, constant.ContextKeyTokenId, 4)
+			case "key":
+				info.ApiKey = "other-key"
+			}
+			isolated, err := acquireResponsesConnection(c, adaptor, info, "resp_second")
+			require.NoError(t, err)
+			assert.NotSame(t, first.entry, isolated.entry)
+			assert.False(t, isolated.reusedContext)
+			isolated.release(false, "")
+		})
+	}
+	common.SetContextKey(c, constant.ContextKeyUserId, 1)
+	common.SetContextKey(c, constant.ContextKeyTokenId, 2)
+	info.ApiKey = "test-key"
+	lease, err := acquireResponsesConnection(c, adaptor, info, "unknown-context")
+	require.NoError(t, err)
+	assert.Same(t, first.entry, lease.entry)
+	assert.False(t, lease.reusedContext)
+	lease.release(false, "")
+	assert.True(t, first.entry.closed)
+}
+
 func TestSelectResponsesWSChannelHonorsPinsAndFilters(t *testing.T) {
 	require.NoError(t, i18n.Init())
 	database := setupRelayChannelDB(t)
 	enabled := &model.Channel{Name: "enabled", Key: "sk-test", Status: common.ChannelStatusEnabled, Type: constant.ChannelTypeOpenAI}
-	enabled.SetSetting(dto.ChannelSettings{ResponsesWebSocketEnabled: true})
-	wsDisabled := &model.Channel{Name: "ws-disabled", Key: "sk-test", Status: common.ChannelStatusEnabled, Type: constant.ChannelTypeOpenAI}
+	enabled.SetSetting(dto.ChannelSettings{ResponsesWebSocketMode: dto.ResponsesWSPassthrough})
+	wsDisabled := &model.Channel{Name: "unsupported", Key: "sk-test", Status: common.ChannelStatusEnabled, Type: constant.ChannelTypeBaidu}
 	disabled := &model.Channel{Name: "disabled", Key: "sk-test", Status: common.ChannelStatusManuallyDisabled, Type: constant.ChannelTypeOpenAI}
 	filtered := &model.Channel{Name: "filtered", Key: "sk-test", Status: common.ChannelStatusEnabled, Type: constant.ChannelTypeAdvancedCustom}
 	for _, channel := range []*model.Channel{enabled, disabled, filtered, wsDisabled} {
@@ -170,10 +243,12 @@ func TestSelectResponsesWSChannelAcceptsNativeResponsesChannelTypes(t *testing.T
 		{name: "advanced custom converter route", channelType: constant.ChannelTypeAdvancedCustom, advanced: convertedRoute, rejectedBy: appdto.FilterResponsesWebSocket},
 		{name: "advanced custom without responses route", channelType: constant.ChannelTypeAdvancedCustom, advanced: chatRoute, rejectedBy: appdto.FilterRequestPath},
 		{name: "anthropic", channelType: constant.ChannelTypeAnthropic, rejectedBy: appdto.FilterResponsesWebSocket},
+		{name: "gemini", channelType: constant.ChannelTypeGemini, rejectedBy: appdto.FilterResponsesWebSocket},
+		{name: "cloudflare", channelType: constant.ChannelCloudflare, rejectedBy: appdto.FilterResponsesWebSocket},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			channel := &model.Channel{Name: tc.name, Key: "sk-test", Status: common.ChannelStatusEnabled, Type: tc.channelType}
-			channel.SetSetting(dto.ChannelSettings{ResponsesWebSocketEnabled: true})
+			channel.SetSetting(dto.ChannelSettings{ResponsesWebSocketMode: dto.ResponsesWSPassthrough})
 			channel.SetOtherSettings(dto.ChannelOtherSettings{AdvancedCustom: tc.advanced})
 			require.NoError(t, database.Create(channel).Error)
 			c, _ := gin.CreateTestContext(httptest.NewRecorder())
@@ -262,7 +337,7 @@ func TestRestoreConnectionContextRejectsChangedAdvancedCustomRoute(t *testing.T)
 	database := setupRelayChannelDB(t)
 	baseURL := "http://upstream.example"
 	channel := &model.Channel{Name: "advanced", Key: "sk-test", Status: common.ChannelStatusEnabled, Type: constant.ChannelTypeAdvancedCustom, BaseURL: &baseURL}
-	channel.SetSetting(dto.ChannelSettings{ResponsesWebSocketEnabled: true})
+	channel.SetSetting(dto.ChannelSettings{ResponsesWebSocketMode: dto.ResponsesWSPassthrough})
 	channel.SetOtherSettings(dto.ChannelOtherSettings{AdvancedCustom: &dto.AdvancedCustomConfig{Routes: []dto.AdvancedCustomRoute{{IncomingPath: "/v1/responses", UpstreamPath: "/v1/responses"}}}})
 	require.NoError(t, database.Create(channel).Error)
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
@@ -287,15 +362,15 @@ func TestRestoreConnectionContextRejectsChangedAdvancedCustomRoute(t *testing.T)
 	assert.ErrorContains(t, apiErr, "upstream route changed")
 }
 
-func TestResponsesWSChannelRoutingRequiresExplicitOptIn(t *testing.T) {
+func TestResponsesWSChannelRoutingDefaultsToHTTPBridge(t *testing.T) {
 	require.NoError(t, i18n.Init())
 	database := setupRelayChannelDB(t)
 	require.NoError(t, database.AutoMigrate(&model.Ability{}))
 	legacy := &model.Channel{Name: "legacy-http", Key: "sk-test", Type: constant.ChannelTypeOpenAI, Status: common.ChannelStatusEnabled, Group: "default", Models: "ws-model", Priority: common.GetPointer(int64(10))}
 	enabled := &model.Channel{Name: "websocket", Key: "sk-test", Type: constant.ChannelTypeCodex, Status: common.ChannelStatusEnabled, Group: "default", Models: "ws-model", Priority: common.GetPointer(int64(0))}
 	unsupported := &model.Channel{Name: "unsupported", Key: "sk-test", Type: constant.ChannelTypeAnthropic, Status: common.ChannelStatusEnabled, Group: "default", Models: "ws-model", Priority: common.GetPointer(int64(5))}
-	enabled.SetSetting(dto.ChannelSettings{ResponsesWebSocketEnabled: true})
-	unsupported.SetSetting(dto.ChannelSettings{ResponsesWebSocketEnabled: true})
+	enabled.SetSetting(dto.ChannelSettings{ResponsesWebSocketMode: dto.ResponsesWSPassthrough})
+	unsupported.SetSetting(dto.ChannelSettings{ResponsesWebSocketMode: dto.ResponsesWSPassthrough})
 	for _, channel := range []*model.Channel{legacy, enabled, unsupported} {
 		require.NoError(t, database.Create(channel).Error)
 		require.NoError(t, database.Create(&model.Ability{ChannelId: channel.Id, Model: "ws-model", Group: "default", Enabled: true, Priority: channel.Priority}).Error)
@@ -316,14 +391,14 @@ func TestResponsesWSChannelRoutingRequiresExplicitOptIn(t *testing.T) {
 	channel, apiErr := selectResponsesWSChannel(c, "ws-model", params)
 	require.Nil(t, apiErr)
 	require.NotNil(t, channel)
-	assert.Equal(t, enabled.Id, channel.Id)
+	assert.Equal(t, legacy.Id, channel.Id)
 	httpChannel, err := model.GetRandomSatisfiedChannel("default", "ws-model", 0, nil)
 	require.NoError(t, err)
 	require.NotNil(t, httpChannel)
 	assert.Equal(t, legacy.Id, httpChannel.Id)
 
-	// Disabling the saved setting takes effect for the next create on an existing session.
-	enabled.SetSetting(dto.ChannelSettings{ResponsesWebSocketEnabled: false})
+	// A changed transport requires a fresh selection on the existing connection.
+	enabled.SetSetting(dto.ChannelSettings{ResponsesWebSocketMode: dto.ResponsesWSHTTPBridge})
 	require.NoError(t, database.Model(enabled).Update("setting", enabled.Setting).Error)
 	model.InitChannelCache()
 	session := &responsesWSSession{lockedChannelID: enabled.Id, lockedModel: "ws-model"}
@@ -331,8 +406,9 @@ func TestResponsesWSChannelRoutingRequiresExplicitOptIn(t *testing.T) {
 	require.NotNil(t, apiErr)
 	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
 	channel, apiErr = selectResponsesWSChannel(c, "ws-model", params)
-	require.NotNil(t, apiErr)
-	assert.Nil(t, channel)
+	require.Nil(t, apiErr)
+	require.NotNil(t, channel)
+	assert.Equal(t, legacy.Id, channel.Id)
 }
 
 // Session affinity follows the HTTP distributor: a strict binding to an
@@ -345,7 +421,7 @@ func TestSelectResponsesWSChannelHonorsStrictSessionBinding(t *testing.T) {
 	bound := &model.Channel{Name: "bound", Key: "sk-test", Type: constant.ChannelTypeOpenAI, Status: common.ChannelStatusAutoDisabled, Group: "default", Models: "ws-model", Priority: common.GetPointer(int64(10))}
 	fallback := &model.Channel{Name: "fallback", Key: "sk-test", Type: constant.ChannelTypeOpenAI, Status: common.ChannelStatusEnabled, Group: "default", Models: "ws-model", Priority: common.GetPointer(int64(0))}
 	for _, channel := range []*model.Channel{bound, fallback} {
-		channel.SetSetting(dto.ChannelSettings{ResponsesWebSocketEnabled: true})
+		channel.SetSetting(dto.ChannelSettings{ResponsesWebSocketMode: dto.ResponsesWSPassthrough})
 		require.NoError(t, database.Create(channel).Error)
 		require.NoError(t, database.Create(&model.Ability{ChannelId: channel.Id, Model: "ws-model", Group: "default", Enabled: channel.Status == common.ChannelStatusEnabled, Priority: channel.Priority}).Error)
 	}
@@ -674,7 +750,7 @@ func TestResponsesWSShutdownInterruptsBusyWriter(t *testing.T) {
 	// An upstream dial that completes after shutdown is closed with a frame too.
 	late, latePeer, cleanupLate := newTestWebSocketPair(t)
 	defer cleanupLate()
-	assert.False(t, s.setTarget(late))
+	assert.False(t, s.setTarget(late, nil))
 	require.NoError(t, latePeer.SetReadDeadline(time.Now().Add(time.Second)))
 	_, _, err := latePeer.ReadMessage()
 	assert.True(t, websocket.IsCloseError(err, websocket.CloseNormalClosure), "want a 1000 close frame, got %v", err)
@@ -726,7 +802,7 @@ func TestResponsesWSChangesModelWithoutClosingClient(t *testing.T) {
 	channels := make(map[string]int)
 	for _, name := range []string{"ws-model-a", "ws-model-b"} {
 		channel := &model.Channel{Name: name, Key: "sk-test", BaseURL: &upstream.URL, Status: common.ChannelStatusEnabled, Type: constant.ChannelTypeOpenAI}
-		channel.SetSetting(dto.ChannelSettings{ResponsesWebSocketEnabled: true})
+		channel.SetSetting(dto.ChannelSettings{ResponsesWebSocketMode: dto.ResponsesWSPassthrough})
 		require.NoError(t, database.Create(channel).Error)
 		channels[name] = channel.Id
 	}

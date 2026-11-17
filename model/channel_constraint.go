@@ -123,21 +123,37 @@ func channelMatchesFilter(ch *Channel, modelName string, filter dto.ChannelFilte
 		// plugins cannot execute this endpoint.
 		return ch.Type != constant.ChannelTypeTaskPlugin || pluginChannel
 	case dto.FilterResponsesWebSocket:
-		if !ch.GetSetting().ResponsesWebSocketEnabled {
-			return false
+		if ch.ResponsesWebSocketMode(modelName) != "http_bridge" {
+			return ch.SupportsNativeResponsesWebSocket(modelName)
+		}
+		if ch.SupportsNativeResponsesWebSocket(modelName) {
+			return true
 		}
 		switch ch.Type {
-		case constant.ChannelTypeOpenAI, constant.ChannelTypeAzure, constant.ChannelTypeCodex, constant.ChannelTypeSub2API, constant.ChannelTypeNewAPI:
-			return true
-		case constant.ChannelTypeAdvancedCustom:
-			// The session forwards native Responses events without protocol
-			// conversion, so only a converter-free /v1/responses route qualifies.
+		case constant.ChannelTypeAnthropic, constant.ChannelTypeGemini, constant.ChannelCloudflare:
+			return !ch.GetSetting().PassThroughBodyEnabled
+		case constant.ChannelTypeAdvancedCustom, constant.ChannelTypeAggregate:
 			route, ok := ch.GetOtherSettings().AdvancedCustom.MatchPathForModel("/v1/responses", modelName)
-			return ok && route.IsNative()
+			return ok && !route.PassThroughBodyEnabled && !ch.GetSetting().PassThroughBodyEnabled
 		default:
 			return false
 		}
 	default:
 		return true
+	}
+}
+
+func (ch *Channel) SupportsNativeResponsesWebSocket(modelName string) bool {
+	switch ch.Type {
+	case constant.ChannelTypeOpenAI, constant.ChannelTypeAzure, constant.ChannelTypeCodex, constant.ChannelTypeSub2API, constant.ChannelTypeNewAPI:
+		return true
+	case constant.ChannelTypeAdvancedCustom:
+		route, ok := ch.GetOtherSettings().AdvancedCustom.MatchPathForModel("/v1/responses", modelName)
+		return ok && route.IsNative()
+	case constant.ChannelTypeAggregate:
+		config := ch.GetOtherSettings().Aggregate
+		return config != nil && config.WebSocket && config.ResponsesPath != ""
+	default:
+		return false
 	}
 }

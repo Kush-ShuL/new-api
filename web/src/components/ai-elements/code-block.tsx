@@ -59,7 +59,7 @@ import {
 } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 
-type CodeBlockProps = HTMLAttributes<HTMLDivElement> & {
+type CodeBlockProps = Omit<HTMLAttributes<HTMLDivElement>, 'title'> & {
   code: string
   collapsedLines?: number
   defaultCollapsed?: boolean

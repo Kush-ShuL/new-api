@@ -5,6 +5,7 @@ import (
 
 	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/relaykit/relayconvert/convmeta"
+	kitutil "github.com/QuantumNous/new-api/relaykit/relayconvert/kitutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -61,6 +62,52 @@ func TestResponseOpenAI2GeminiMapsTextToolFinishReasonAndUsage(t *testing.T) {
 	require.NotNil(t, resp.Candidates[0].Content.Parts[1].FunctionCall)
 	assert.Equal(t, "lookup", resp.Candidates[0].Content.Parts[1].FunctionCall.FunctionName)
 	assert.Equal(t, map[string]any{"q": "x"}, resp.Candidates[0].Content.Parts[1].FunctionCall.Arguments)
+}
+
+func TestGeminiConversionMapsReasoningAndOmitsUnreportedStreamUsage(t *testing.T) {
+	usage := &dto.Usage{PromptTokens: 37, CompletionTokens: 173, TotalTokens: 210}
+	usage.CompletionTokenDetails.ReasoningTokens = 47
+	usage.PromptTokensDetails.CachedTokens = 12
+	state := NewChatToGeminiStreamState()
+	chunks, err := state.ConvertChunk(&dto.ChatCompletionsStreamResponse{
+		Choices: []dto.ChatCompletionsStreamResponseChoice{{Delta: dto.ChatCompletionsStreamResponseChoiceDelta{Content: geminiRespPtr("hello")}}},
+	}, &convmeta.Values{})
+	require.NoError(t, err)
+	require.Len(t, chunks, 1)
+	body, err := kitutil.Marshal(chunks[0])
+	require.NoError(t, err)
+	assert.NotContains(t, string(body), "usageMetadata")
+	stop := "stop"
+	final, err := state.ConvertChunk(&dto.ChatCompletionsStreamResponse{
+		Choices: []dto.ChatCompletionsStreamResponseChoice{{FinishReason: &stop}}, Usage: usage,
+	}, nil)
+	require.NoError(t, err)
+	require.Len(t, final, 1)
+	for _, response := range []*dto.GeminiChatResponse{
+		ResponseOpenAI2Gemini(&dto.OpenAITextResponse{Usage: *usage}, nil),
+		StreamResponseOpenAI2Gemini(&dto.ChatCompletionsStreamResponse{Usage: usage, Choices: []dto.ChatCompletionsStreamResponseChoice{{FinishReason: &stop}}}, nil),
+		final[0],
+	} {
+		metadata := response.UsageMetadata
+		assert.Equal(t, 37, metadata.PromptTokenCount)
+		assert.Equal(t, 126, metadata.CandidatesTokenCount)
+		assert.Equal(t, 47, metadata.ThoughtsTokenCount)
+		assert.Equal(t, 210, metadata.TotalTokenCount)
+		assert.Equal(t, 12, metadata.CachedContentTokenCount)
+		require.NotNil(t, metadata.BillingUsage)
+		assert.Equal(t, 173, metadata.BillingUsage.OpenAIUsage.CompletionTokens)
+		body, err := kitutil.Marshal(response)
+		require.NoError(t, err)
+		assert.NotContains(t, string(body), "billing_usage")
+		assert.NotContains(t, string(body), `"promptTokensDetails":null`)
+	}
+	// Multi-hop conversions may retain details only in the accounting snapshot.
+	carried := *usage
+	carried.BillingUsage = dto.NewOpenAIChatBillingUsage(usage)
+	carried.CompletionTokenDetails = dto.OutputTokenDetails{}
+	response := ResponseOpenAI2Gemini(&dto.OpenAITextResponse{Usage: carried}, nil)
+	assert.Equal(t, 47, response.UsageMetadata.ThoughtsTokenCount)
+	assert.Equal(t, 126, response.UsageMetadata.CandidatesTokenCount)
 }
 
 func TestStreamResponseOpenAI2GeminiMapsToolCallFinishReasonAndUsage(t *testing.T) {

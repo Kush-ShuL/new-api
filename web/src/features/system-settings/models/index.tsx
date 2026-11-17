@@ -25,6 +25,9 @@ import {
 } from './section-registry.tsx'
 
 const defaultModelSettings: ModelSettings = {
+  'global.responses_reasoning_encryption': true,
+  'global.responses_reasoning_summary_mode': 'match',
+  'global.responses_reasoning_summary_models': '{}',
   'global.pass_through_request_enabled': false,
   'global.thinking_model_blacklist': '[]',
   'global.chat_completions_to_responses_policy': '{}',

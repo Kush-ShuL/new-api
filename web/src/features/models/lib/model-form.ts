@@ -36,6 +36,16 @@ export const modelFormSchema = z.object({
   tags: z.array(z.string()).default([]),
   vendor_id: z.number(),
   endpoints: z.string().default(''),
+  model_type: z
+    .enum(['', 'chat', 'embedding', 'rerank', 'image', 'audio', 'video'])
+    .default(''),
+  context_length: z.number().int().min(0).max(2147483647).default(0),
+  input_modalities: z.array(z.string()).default([]),
+  output_modalities: z.array(z.string()).default([]),
+  endpoint_mode: z.enum(['whitelist', 'blacklist']).default('blacklist'),
+  websocket_mode: z
+    .enum(['inherit', 'pool', 'passthrough', 'http_bridge'])
+    .default('inherit'),
   name_rule: z.number().min(0).max(3).default(0),
   status: z.boolean().default(true),
   sync_official: z.boolean().default(true),
@@ -52,6 +62,12 @@ export const MODEL_FORM_DEFAULT_VALUES: ModelFormValues = {
   tags: [],
   vendor_id: 0,
   endpoints: '',
+  model_type: '',
+  context_length: 0,
+  input_modalities: [],
+  output_modalities: [],
+  endpoint_mode: 'blacklist',
+  websocket_mode: 'inherit',
   name_rule: 0,
   status: true,
   sync_official: true,
@@ -84,6 +100,11 @@ export type VendorFormValues = z.infer<typeof vendorFormSchema>
  * Transform model to form default values
  */
 export function transformModelToFormDefaults(model: Model): ModelFormValues {
+  const endpoints = (model.endpoints ? JSON.parse(model.endpoints) : null) ?? {}
+  const hasPolicy = !Array.isArray(endpoints) && 'mode' in endpoints
+  let endpointMode: ModelFormValues['endpoint_mode'] = 'blacklist'
+  if (hasPolicy) endpointMode = endpoints.mode
+  else if (Object.keys(endpoints).length > 0) endpointMode = 'whitelist'
   return {
     id: model.id,
     model_name: model.model_name,
@@ -91,7 +112,17 @@ export function transformModelToFormDefaults(model: Model): ModelFormValues {
     icon: model.icon || '',
     tags: parseTagsFromUtils(model.tags),
     vendor_id: model.vendor_id ?? 0,
-    endpoints: model.endpoints || '',
+    model_type: (model.model_type || '') as ModelFormValues['model_type'],
+    context_length: model.context_length ?? 0,
+    input_modalities: model.input_modalities || [],
+    output_modalities: model.output_modalities || [],
+    endpoints: hasPolicy
+      ? JSON.stringify(endpoints.endpoints, null, 2)
+      : model.endpoints || '',
+    endpoint_mode: endpointMode,
+    websocket_mode: hasPolicy
+      ? endpoints.websocket_mode || 'inherit'
+      : 'inherit',
     name_rule: model.name_rule || 0,
     status: model.status === 1,
     sync_official: model.sync_official === 1,
@@ -113,7 +144,19 @@ export function transformFormDataToModelPayload(
     icon: formData.icon || '',
     tags: formatTagsArray(formData.tags),
     vendor_id: formData.vendor_id,
-    endpoints: formData.endpoints || '',
+    model_type: formData.model_type,
+    context_length: formData.context_length,
+    input_modalities: formData.input_modalities,
+    output_modalities: formData.output_modalities,
+    endpoints: JSON.stringify({
+      mode: formData.endpoint_mode,
+      endpoints: formData.endpoints.trim()
+        ? JSON.parse(formData.endpoints)
+        : [],
+      ...(formData.websocket_mode === 'inherit'
+        ? {}
+        : { websocket_mode: formData.websocket_mode }),
+    }),
     name_rule: formData.name_rule,
     status: formData.status ? 1 : 0,
     sync_official: formData.sync_official ? 1 : 0,

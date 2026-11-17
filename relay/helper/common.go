@@ -220,6 +220,14 @@ func ClaudeChunkData(c *gin.Context, resp dto.ClaudeResponse, data string) {
 }
 
 func ResponseChunkData(c *gin.Context, resp dto.ResponsesStreamResponse, data string) error {
+	if sink, ok := c.Get("responses_event_writer"); ok {
+		return sink.(func(string) error)(data)
+	}
+	return WriteResponsesEvent(c, resp, data)
+}
+
+// WriteResponsesEvent emits an HTTP SSE event after any transport processing.
+func WriteResponsesEvent(c *gin.Context, resp dto.ResponsesStreamResponse, data string) error {
 	if requestContextDone(c) {
 		return fmt.Errorf("request context done: %w", c.Request.Context().Err())
 	}

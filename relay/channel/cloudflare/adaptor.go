@@ -13,6 +13,7 @@ import (
 	"github.com/QuantumNous/new-api/relay/constant"
 	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/relaykit/types"
+	"github.com/QuantumNous/new-api/service"
 
 	"github.com/gin-gonic/gin"
 )
@@ -20,14 +21,14 @@ import (
 type Adaptor struct {
 }
 
-func (a *Adaptor) ConvertGeminiRequest(*gin.Context, *relaycommon.RelayInfo, *dto.GeminiChatRequest) (any, error) {
-	//TODO implement me
-	return nil, errors.New("not implemented")
+func (a *Adaptor) ConvertGeminiRequest(c *gin.Context, info *relaycommon.RelayInfo, request *dto.GeminiChatRequest) (any, error) {
+	info.RelayMode = constant.RelayModeChatCompletions
+	return (&openai.Adaptor{}).ConvertGeminiRequest(c, info, request)
 }
 
-func (a *Adaptor) ConvertClaudeRequest(*gin.Context, *relaycommon.RelayInfo, *dto.ClaudeRequest) (any, error) {
-	//TODO implement me
-	panic("implement me")
+func (a *Adaptor) ConvertClaudeRequest(c *gin.Context, info *relaycommon.RelayInfo, request *dto.ClaudeRequest) (any, error) {
+	info.RelayMode = constant.RelayModeChatCompletions
+	return (&openai.Adaptor{}).ConvertClaudeRequest(c, info, request)
 }
 
 func (a *Adaptor) Init(info *relaycommon.RelayInfo) {
@@ -40,7 +41,7 @@ func (a *Adaptor) GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
 	case constant.RelayModeEmbeddings:
 		return fmt.Sprintf("%s/client/v4/accounts/%s/ai/v1/embeddings", info.ChannelBaseUrl, info.ApiVersion), nil
 	case constant.RelayModeResponses:
-		return fmt.Sprintf("%s/client/v4/accounts/%s/ai/v1/responses", info.ChannelBaseUrl, info.ApiVersion), nil
+		return fmt.Sprintf("%s/client/v4/accounts/%s/ai/v1/chat/completions", info.ChannelBaseUrl, info.ApiVersion), nil
 	default:
 		return fmt.Sprintf("%s/client/v4/accounts/%s/ai/run/%s", info.ChannelBaseUrl, info.ApiVersion, info.UpstreamModelName), nil
 	}
@@ -65,7 +66,15 @@ func (a *Adaptor) ConvertOpenAIRequest(c *gin.Context, info *relaycommon.RelayIn
 }
 
 func (a *Adaptor) ConvertOpenAIResponsesRequest(c *gin.Context, info *relaycommon.RelayInfo, request dto.OpenAIResponsesRequest) (any, error) {
-	return request, nil
+	result, err := service.ConvertRequest(c, info, types.RelayFormatOpenAI, &request)
+	if err != nil {
+		return nil, err
+	}
+	chat, ok := result.Value.(*dto.GeneralOpenAIRequest)
+	if !ok {
+		return nil, fmt.Errorf("expected OpenAI chat request, got %T", result.Value)
+	}
+	return (&openai.Adaptor{}).ConvertOpenAIRequest(c, info, chat)
 }
 
 func (a *Adaptor) DoRequest(c *gin.Context, info *relaycommon.RelayInfo, requestBody io.Reader) (any, error) {
@@ -108,15 +117,15 @@ func (a *Adaptor) DoResponse(c *gin.Context, resp *http.Response, info *relaycom
 		return openai.OpenaiHandler(c, info, resp)
 	case constant.RelayModeChatCompletions:
 		if info.IsStream {
-			err, usage = cfStreamHandler(c, info, resp)
+			usage, err = openai.OaiStreamHandler(c, info, resp)
 		} else {
-			err, usage = cfHandler(c, info, resp)
+			usage, err = openai.OpenaiHandler(c, info, resp)
 		}
 	case constant.RelayModeResponses:
 		if info.IsStream {
-			usage, err = openai.OaiResponsesStreamHandler(c, info, resp)
+			usage, err = openai.OaiChatToResponsesStreamHandler(c, info, resp)
 		} else {
-			usage, err = openai.OaiResponsesHandler(c, info, resp)
+			usage, err = openai.OaiChatToResponsesHandler(c, info, resp)
 		}
 	case constant.RelayModeAudioTranslation:
 		fallthrough

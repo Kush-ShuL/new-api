@@ -9,6 +9,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/logger"
+	"github.com/QuantumNous/new-api/model"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relay/helper"
 	"github.com/QuantumNous/new-api/relaykit/dto"
@@ -24,8 +25,9 @@ import (
 // channel retries retain the resulting billing session and pricing snapshot.
 func PrepareRequestBilling(c *gin.Context, info *relaycommon.RelayInfo) *types.NewAPIError {
 	needSensitiveCheck := setting.ShouldCheckPromptSensitive()
+	contextLength := model.ModelContextLength(info.OriginModelName)
 	meta := &types.TokenCountMeta{TokenType: types.TokenTypeTokenizer}
-	if info.Request != nil && (needSensitiveCheck || constant.CountToken) {
+	if info.Request != nil && (needSensitiveCheck || constant.CountToken || contextLength > 0) {
 		meta = info.Request.GetTokenCountMeta()
 	} else {
 		// Avoid building CombineText when only the pricing quantities are needed.
@@ -50,9 +52,27 @@ func PrepareRequestBilling(c *gin.Context, info *relaycommon.RelayInfo) *types.N
 		}
 	}
 
-	tokens, err := service.EstimateRequestToken(c, meta, info)
+	var tokens int
+	var err error
+	if contextLength > 0 {
+		tokens, err = service.CountRequestToken(c, meta, info)
+	} else {
+		tokens, err = service.EstimateRequestToken(c, meta, info)
+	}
 	if err != nil {
 		return types.NewError(err, types.ErrorCodeCountTokenFailed)
+	}
+	if contextLength > 0 && (tokens > contextLength || (meta != nil && meta.MaxTokens > contextLength-tokens)) {
+		maxOutput := 0
+		if meta != nil {
+			maxOutput = meta.MaxTokens
+		}
+		return types.WithOpenAIError(types.OpenAIError{
+			Message: fmt.Sprintf("model %q context length is %d tokens, but the request needs %d input tokens and %d maximum output tokens", info.OriginModelName, contextLength, tokens, maxOutput),
+			Type:    "invalid_request_error",
+			Param:   "input",
+			Code:    "context_length_exceeded",
+		}, http.StatusBadRequest, types.ErrOptionWithSkipRetry())
 	}
 	info.SetEstimatePromptTokens(tokens)
 

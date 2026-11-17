@@ -35,9 +35,17 @@ func (p ChatCompletionsToResponsesPolicy) IsChannelEnabled(channelID int, channe
 	return false
 }
 
+type ResponsesSummaryModel struct {
+	ChannelID int    `json:"channel_id"`
+	Model     string `json:"model"`
+}
+
 type GlobalSettings struct {
-	PassThroughRequestEnabled bool     `json:"pass_through_request_enabled"`
-	ThinkingModelBlacklist    []string `json:"thinking_model_blacklist"`
+	ResponsesReasoningEncryption    bool                             `json:"responses_reasoning_encryption"`
+	ResponsesReasoningSummaryMode   string                           `json:"responses_reasoning_summary_mode"`
+	ResponsesReasoningSummaryModels map[string]ResponsesSummaryModel `json:"responses_reasoning_summary_models"`
+	PassThroughRequestEnabled       bool                             `json:"pass_through_request_enabled"`
+	ThinkingModelBlacklist          []string                         `json:"thinking_model_blacklist"`
 	// EffortTailModelIDs lists real model IDs that sit inside the GPT/o-series
 	// family whitelist but whose names already end in an effort word.
 	EffortTailModelIDs               []string                         `json:"effort_tail_model_ids"`
@@ -46,7 +54,10 @@ type GlobalSettings struct {
 
 // 默认配置
 var defaultOpenaiSettings = GlobalSettings{
-	PassThroughRequestEnabled: false,
+	ResponsesReasoningEncryption:    true,
+	ResponsesReasoningSummaryMode:   "match",
+	ResponsesReasoningSummaryModels: map[string]ResponsesSummaryModel{},
+	PassThroughRequestEnabled:       false,
 	ThinkingModelBlacklist: []string{
 		"moonshotai/kimi-k2-thinking",
 		"kimi-k2-thinking",

@@ -263,6 +263,7 @@ export function ModelsTable() {
             options: [
               { label: t('Allowed'), value: 'enabled' },
               { label: t('Not listed'), value: 'disabled' },
+              { label: t('Cannot be displayed'), value: 'unavailable' },
             ],
             singleSelect: true,
           },

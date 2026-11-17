@@ -1,6 +1,3 @@
-import { render, screen } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
-import { useForm } from 'react-hook-form'
 /*
 Copyright (C) 2023-2026 QuantumNous
 
@@ -19,44 +16,29 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { assert, describe, expect, test } from 'vitest'
+import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { useForm } from 'react-hook-form'
+import { describe, expect, test } from 'vitest'
 
 import { Form } from '@/components/ui/form'
 
-import { CHANNEL_TYPE_NEW_API, CHANNEL_TYPE_SUB2API } from '../../constants'
-import { CHANNEL_TYPE_ADVANCED_CUSTOM } from '../../lib/advanced-custom'
 import {
   buildSettingJSON,
   CHANNEL_FORM_DEFAULT_VALUES,
   transformChannelToFormDefaults,
-  transformFormDataToCreatePayload,
-  transformFormDataToUpdatePayload,
   type ChannelFormValues,
 } from '../../lib/channel-form'
 import { channelSchema } from '../../types'
 import { ResponsesWebSocketSetting } from '../responses-websocket-setting'
 
-const supportedChannelTypes = [
-  1,
-  3,
-  57,
-  CHANNEL_TYPE_ADVANCED_CUSTOM,
-  CHANNEL_TYPE_SUB2API,
-  CHANNEL_TYPE_NEW_API,
-]
-
 function SettingsForm(props: {
   channelType: number
   disabled?: boolean
-  enabled?: boolean
   onSave: (value: string) => void
 }) {
   const form = useForm<ChannelFormValues>({
-    defaultValues: {
-      ...CHANNEL_FORM_DEFAULT_VALUES,
-      type: props.channelType,
-      responses_websocket_enabled: props.enabled,
-    },
+    defaultValues: { ...CHANNEL_FORM_DEFAULT_VALUES, type: props.channelType },
   })
   return (
     <Form {...form}>
@@ -75,53 +57,34 @@ function SettingsForm(props: {
   )
 }
 
-describe('Responses WebSocket channel setting', () => {
-  describe.each(supportedChannelTypes)('channel type %s', (channelType) => {
-    test.each([undefined, false, true])(
-      'preserves setting %s through create, update and reload',
-      (enabled) => {
-        const channel = channelSchema.parse({
-          id: 1,
-          name: 'Test channel',
-          key: '',
-          type: channelType,
-          status: 1,
-          created_time: 0,
-          test_time: 0,
-          response_time: 0,
-          balance_updated_time: 0,
-          setting: JSON.stringify({ responses_websocket_enabled: enabled }),
-        })
-        const values = transformChannelToFormDefaults(channel)
-        const payloads = [
-          transformFormDataToCreatePayload(values).channel,
-          transformFormDataToUpdatePayload(values, channel.id),
-        ]
-        for (const payload of payloads) {
-          assert(typeof payload.setting === 'string')
-          expect(JSON.parse(payload.setting).responses_websocket_enabled).toBe(
-            enabled === true
-          )
-          expect(
-            transformChannelToFormDefaults({
-              ...channel,
-              setting: payload.setting,
-            }).responses_websocket_enabled
-          ).toBe(enabled === true)
-        }
-      }
-    )
-  })
+describe('Responses WebSocket channel mode', () => {
+  test.each(['pool', 'passthrough', 'http_bridge'] as const)(
+    'preserves %s when saving and reopening a channel',
+    (mode) => {
+      const channel = channelSchema.parse({
+        id: 1,
+        name: 'Test',
+        key: '',
+        type: 1,
+        status: 1,
+        created_time: 0,
+        test_time: 0,
+        response_time: 0,
+        balance_updated_time: 0,
+        setting: JSON.stringify({ responses_websocket_mode: mode }),
+      })
+      const values = transformChannelToFormDefaults(channel)
+      const saved = buildSettingJSON(values)
+      expect(JSON.parse(saved).responses_websocket_mode).toBe(mode)
+      expect(
+        transformChannelToFormDefaults({ ...channel, setting: saved })
+          .responses_websocket_mode
+      ).toBe(mode)
+    }
+  )
 
-  test('new channels default to WebSocket disabled', () => {
-    expect(
-      JSON.parse(buildSettingJSON(CHANNEL_FORM_DEFAULT_VALUES))
-        .responses_websocket_enabled
-    ).toBe(false)
-  })
-
-  test.each(supportedChannelTypes)(
-    'channel type %s exposes an accessible switch and saves on and off',
+  test.each([1, 14, 64])(
+    'provider %s defaults to HTTP bridge and lets the user select each transport',
     async (channelType) => {
       const user = userEvent.setup()
       const saved: string[] = []
@@ -131,45 +94,38 @@ describe('Responses WebSocket channel setting', () => {
           onSave={(value) => saved.push(value)}
         />
       )
-      const toggle = screen.getByRole('switch', {
-        name: 'Enable Responses WebSocket',
-      })
-      expect(toggle).not.toBeChecked()
-      await user.click(toggle)
-      await user.click(screen.getByRole('button', { name: 'Save' }))
-      expect(JSON.parse(saved[0]).responses_websocket_enabled).toBe(true)
-      toggle.focus()
-      await user.keyboard(' ')
-      await user.click(screen.getByRole('button', { name: 'Save' }))
-      expect(JSON.parse(saved[1]).responses_websocket_enabled).toBe(false)
+      expect(screen.getByRole('radio', { name: 'HTTP bridge' })).toBeChecked()
+      for (const [label, mode] of [
+        ['Connection pool', 'pool'],
+        ['Passthrough', 'passthrough'],
+        ['HTTP bridge', 'http_bridge'],
+      ]) {
+        await user.click(screen.getByRole('radio', { name: label }))
+        await user.click(screen.getByRole('button', { name: 'Save' }))
+        expect(JSON.parse(saved.at(-1) || '{}').responses_websocket_mode).toBe(
+          mode
+        )
+      }
     }
   )
 
-  test('unsupported channels hide the switch and do not save it as enabled', async () => {
+  test('unsupported providers hide mode selection and omit it from saved settings', async () => {
     const user = userEvent.setup()
     const saved: string[] = []
     render(
-      <SettingsForm
-        channelType={14}
-        enabled
-        onSave={(value) => saved.push(value)}
-      />
+      <SettingsForm channelType={2} onSave={(value) => saved.push(value)} />
     )
-    expect(screen.queryByRole('switch')).not.toBeInTheDocument()
+    expect(screen.queryByRole('radiogroup')).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Save' }))
-    expect(JSON.parse(saved[0]).responses_websocket_enabled).toBe(false)
+    expect(JSON.parse(saved[0]).responses_websocket_mode).toBeUndefined()
   })
 
-  test('locked channel settings prevent toggling', async () => {
+  test('locked configuration prevents changing the selected transport', async () => {
     const user = userEvent.setup()
-    render(
-      <SettingsForm channelType={1} disabled enabled onSave={() => undefined} />
-    )
-    const toggle = screen.getByRole('switch', {
-      name: 'Enable Responses WebSocket',
-    })
-    expect(toggle).toHaveAttribute('aria-disabled', 'true')
-    await user.click(toggle)
-    expect(toggle).toBeChecked()
+    render(<SettingsForm channelType={1} disabled onSave={() => undefined} />)
+    const pool = screen.getByRole('radio', { name: 'Connection pool' })
+    expect(pool).toHaveAttribute('aria-disabled', 'true')
+    await user.click(pool)
+    expect(screen.getByRole('radio', { name: 'HTTP bridge' })).toBeChecked()
   })
 })

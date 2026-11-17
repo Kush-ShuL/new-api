@@ -46,7 +46,12 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { cn } from '@/lib/utils'
 
 import { getSortLabels, type SortOption, type ViewMode } from '../constants'
-import type { PricingModel, PricingVendor, TokenUnit } from '../types'
+import type {
+  ModelCapabilityFilters,
+  PricingModel,
+  PricingVendor,
+  TokenUnit,
+} from '../types'
 import { PricingSidebar } from './pricing-sidebar'
 
 export interface PricingToolbarProps {
@@ -65,6 +70,8 @@ export interface PricingToolbarProps {
   vendorFilter: string
   groupFilter: string
   tagFilter: string
+  capabilityFilters: ModelCapabilityFilters
+  onCapabilityFiltersChange: (updates: Partial<ModelCapabilityFilters>) => void
   onQuotaTypeChange: (value: string) => void
   onEndpointTypeChange: (value: string) => void
   onVendorChange: (value: string) => void
@@ -86,7 +93,7 @@ export function PricingToolbar(props: PricingToolbarProps) {
   const sortLabels = getSortLabels(t)
 
   return (
-    <div className='bg-card rounded-xl border p-3'>
+    <div className='glass-surface rounded-xl border p-3'>
       <div className='flex flex-wrap items-center justify-between gap-3'>
         <div className='flex items-center gap-2'>
           <Button
@@ -209,6 +216,8 @@ export function PricingToolbar(props: PricingToolbarProps) {
               vendorFilter={props.vendorFilter}
               groupFilter={props.groupFilter}
               tagFilter={props.tagFilter}
+              capabilityFilters={props.capabilityFilters}
+              onCapabilityFiltersChange={props.onCapabilityFiltersChange}
               onQuotaTypeChange={props.onQuotaTypeChange}
               onEndpointTypeChange={props.onEndpointTypeChange}
               onVendorChange={props.onVendorChange}

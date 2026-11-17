@@ -109,7 +109,7 @@ function buildChatSample(lang: Lang, ctx: SampleContext): string {
       `curl ${url} \\`,
       `  -H "Authorization: Bearer $${ctx.apiKeyEnv}" \\`,
       `  -H "Content-Type: application/json" \\`,
-      `  -d '${bodyJson.replace(/\n/g, '\n     ')}'`,
+      `  -d '${bodyJson.replaceAll('\n', '\n     ')}'`,
     ].join('\n')
   }
 
@@ -158,6 +158,43 @@ function buildChatSample(lang: Lang, ctx: SampleContext): string {
   ].join('\n')
 }
 
+function buildResponsesWebSocketSample(lang: Lang, ctx: SampleContext): string {
+  const url = `${ctx.baseUrl}${ctx.endpointPath}`.replace(/^http/, 'ws')
+  const payload = {
+    type: 'response.create',
+    model: ctx.modelName,
+    input: 'Hello',
+  }
+  if (lang === 'python') {
+    return [
+      'import json, os',
+      'from websockets.sync.client import connect',
+      '',
+      `with connect("${url}", additional_headers={"Authorization": "Bearer " + os.environ["${ctx.apiKeyEnv}"]}) as ws:`,
+      `    ws.send(json.dumps(${JSON.stringify(payload)}))`,
+      '    for message in ws:',
+      '        event = json.loads(message)',
+      '        print(event)',
+      '        if event["type"] in ("response.completed", "response.failed", "response.incomplete", "error"):',
+      '            break',
+    ].join('\n')
+  }
+  return [
+    "import WebSocket from 'ws'",
+    '',
+    `const ws = new WebSocket('${url}', {`,
+    `  headers: { Authorization: \`Bearer \${process.env.${ctx.apiKeyEnv}}\` },`,
+    '})',
+    `ws.on('open', () => ws.send(JSON.stringify(${JSON.stringify(payload, null, 2)})))`,
+    "ws.on('message', (data) => {",
+    '  const event = JSON.parse(data.toString())',
+    '  console.log(event)',
+    "  if (['response.completed', 'response.failed', 'response.incomplete', 'error'].includes(event.type)) ws.close()",
+    '})',
+    "ws.on('error', console.error)",
+  ].join('\n')
+}
+
 function buildAnthropicSample(lang: Lang, ctx: SampleContext): string {
   const url = `${ctx.baseUrl}${ctx.endpointPath}`
   const userMessage = 'Explain quantum entanglement in one paragraph.'
@@ -177,7 +214,7 @@ function buildAnthropicSample(lang: Lang, ctx: SampleContext): string {
       `  -H "x-api-key: $${ctx.apiKeyEnv}" \\`,
       `  -H "anthropic-version: 2023-06-01" \\`,
       `  -H "Content-Type: application/json" \\`,
-      `  -d '${body.replace(/\n/g, '\n     ')}'`,
+      `  -d '${body.replaceAll('\n', '\n     ')}'`,
     ].join('\n')
   }
   if (lang === 'python') {
@@ -249,7 +286,7 @@ function buildGeminiSample(lang: Lang, ctx: SampleContext): string {
     return [
       `curl '${url}' \\`,
       `  -H 'Content-Type: application/json' \\`,
-      `  -d '${body.replace(/\n/g, '\n     ')}'`,
+      `  -d '${body.replaceAll('\n', '\n     ')}'`,
     ].join('\n')
   }
   if (lang === 'python') {
@@ -299,7 +336,7 @@ function buildEmbeddingSample(lang: Lang, ctx: SampleContext): string {
       `curl ${url} \\`,
       `  -H "Authorization: Bearer $${ctx.apiKeyEnv}" \\`,
       `  -H "Content-Type: application/json" \\`,
-      `  -d '${body.replace(/\n/g, '\n     ')}'`,
+      `  -d '${body.replaceAll('\n', '\n     ')}'`,
     ].join('\n')
   }
   if (lang === 'python') {
@@ -365,7 +402,7 @@ function buildImageSample(lang: Lang, ctx: SampleContext): string {
       `curl ${url} \\`,
       `  -H "Authorization: Bearer $${ctx.apiKeyEnv}" \\`,
       `  -H "Content-Type: application/json" \\`,
-      `  -d '${body.replace(/\n/g, '\n     ')}'`,
+      `  -d '${body.replaceAll('\n', '\n     ')}'`,
     ].join('\n')
   }
   if (lang === 'python') {
@@ -430,8 +467,9 @@ function buildSample(
 ): string {
   if (endpointType === 'anthropic') return buildAnthropicSample(lang, ctx)
   if (endpointType === 'gemini') return buildGeminiSample(lang, ctx)
-  if (endpointType === 'embeddings' || endpointType === 'jina-rerank')
+  if (endpointType === 'embeddings' || endpointType === 'jina-rerank') {
     return buildEmbeddingSample(lang, ctx)
+  }
   if (endpointType === 'image-generation') return buildImageSample(lang, ctx)
   return buildChatSample(lang, ctx)
 }
@@ -461,7 +499,14 @@ function CodeSamplesSection(props: {
   }, [status])
 
   const endpoints = useMemo(() => {
-    const types = props.model.supported_endpoint_types || []
+    const policy = props.model.endpoint_policy
+    const types = (props.model.supported_endpoint_types || []).filter(
+      (type) => {
+        if (!policy) return true
+        const listed = policy.endpoints.includes(type)
+        return policy.mode === 'whitelist' ? listed : !listed
+      }
+    )
     return types
       .map((type) => {
         const info = props.endpointMap[type] || {}
@@ -478,6 +523,7 @@ function CodeSamplesSection(props: {
     endpoints[0]?.type ?? ''
   )
   const [lang, setLang] = useState<Lang>('curl')
+  const [transport, setTransport] = useState('http')
 
   const activeEndpoint = useMemo(() => {
     return endpoints.find((e) => e.type === endpointType) ?? endpoints[0]
@@ -487,19 +533,25 @@ function CodeSamplesSection(props: {
     return null
   }
 
-  const code = buildSample(lang, activeEndpoint.type, {
+  const webSocket =
+    activeEndpoint.type === 'openai-response' && transport === 'websocket'
+  const sampleLang = webSocket && lang === 'curl' ? 'javascript' : lang
+  const sampleContext = {
     baseUrl,
     apiKeyEnv: 'NEW_API_KEY',
     modelName: props.model.model_name || '',
     endpointType: activeEndpoint.type,
     endpointPath: activeEndpoint.path,
-  })
+  }
+  const code = webSocket
+    ? buildResponsesWebSocketSample(sampleLang, sampleContext)
+    : buildSample(sampleLang, activeEndpoint.type, sampleContext)
 
   return (
     <section>
       <SectionTitle icon={ScrollText}>{t('Code samples')}</SectionTitle>
 
-      <div className='flex flex-wrap items-center gap-2'>
+      <div className='mb-3 flex min-w-0 flex-wrap items-center justify-between gap-2'>
         {endpoints.length > 1 && (
           <Tabs value={endpointType} onValueChange={setEndpointType}>
             <TabsList className='bg-muted/40 h-8 p-0.5'>
@@ -516,26 +568,51 @@ function CodeSamplesSection(props: {
           </Tabs>
         )}
 
-        <Tabs
-          value={lang}
-          onValueChange={(v) => setLang(v as Lang)}
-          className='ml-auto'
-        >
-          <TabsList className='bg-muted/40 h-8 p-0.5'>
-            {(Object.keys(LANG_LABELS) as Lang[]).map((l) => (
-              <TabsTrigger key={l} value={l} className='h-7 px-2.5 text-xs'>
-                {LANG_LABELS[l]}
+        {activeEndpoint.type === 'openai-response' && (
+          <Tabs value={transport} onValueChange={setTransport}>
+            <TabsList className='bg-muted/40 h-8 p-0.5'>
+              <TabsTrigger value='http' className='h-7 px-2.5 text-xs'>
+                HTTP
               </TabsTrigger>
-            ))}
-          </TabsList>
-        </Tabs>
+              <TabsTrigger value='websocket' className='h-7 px-2.5 text-xs'>
+                WebSocket
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+        )}
       </div>
 
-      <div className='mt-3'>
-        <CodeBlock code={code} language={LANG_HIGHLIGHT[lang]}>
-          <CodeBlockCopyButton />
-        </CodeBlock>
-      </div>
+      <CodeBlock
+        code={code}
+        language={LANG_HIGHLIGHT[sampleLang]}
+        showLineNumbers
+        showToolbar
+        enableCollapse={false}
+        className='glass-surface border-border/60 my-0 min-w-0 rounded-xl shadow-none [&_.cm-scroller]:pl-4'
+        title={
+          <Tabs
+            value={sampleLang}
+            onValueChange={(v) => setLang(v as Lang)}
+            className='min-w-0 font-sans tracking-normal normal-case'
+          >
+            <TabsList className='w-full flex-wrap justify-start gap-0.5 bg-transparent p-0 group-data-horizontal/tabs:h-auto'>
+              {(Object.keys(LANG_LABELS) as Lang[])
+                .filter((l) => !webSocket || l !== 'curl')
+                .map((l) => (
+                  <TabsTrigger
+                    key={l}
+                    value={l}
+                    className='h-7 flex-none px-2 text-xs'
+                  >
+                    {LANG_LABELS[l]}
+                  </TabsTrigger>
+                ))}
+            </TabsList>
+          </Tabs>
+        }
+      >
+        <CodeBlockCopyButton />
+      </CodeBlock>
 
       <p className='text-muted-foreground mt-2 text-xs'>
         {t('Replace')}{' '}

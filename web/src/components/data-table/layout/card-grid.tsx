@@ -186,7 +186,7 @@ export function DataTableCardGrid<TData>(props: DataTableCardGridProps<TData>) {
             data-sortable-id={row.id}
             data-state={isSelected ? 'selected' : undefined}
             className={cn(
-              'rounded-lg border bg-(--data-table-card-bg,var(--table-row)) px-3 py-2.5 transition-[background-color,border-color] duration-150 data-[state=selected]:[--data-table-card-bg:color-mix(in_oklch,var(--primary)_7%,var(--table-row))] data-[state=selected]:border-primary/40',
+              'relative isolate min-w-0 overflow-hidden rounded-xl border-[0.5px] bg-(--data-table-card-bg,var(--table-row)) p-4 transition-[background-color,border-color] duration-150 data-[state=selected]:[--data-table-card-bg:color-mix(in_oklch,var(--primary)_7%,var(--table-row))] data-[state=selected]:border-primary/40',
               props.getRowClassName?.(row)
             )}
           >

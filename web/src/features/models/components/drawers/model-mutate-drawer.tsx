@@ -36,6 +36,8 @@ import { ErrorState } from '@/components/error-state'
 import { JsonEditor } from '@/components/json-editor'
 import { LoadingState } from '@/components/loading-state'
 import { LobeIconField } from '@/components/lobe-icon-field'
+import { MultiSelect } from '@/components/multi-select'
+import { ResponsesWebSocketModeSelect } from '@/components/responses-websocket-mode'
 import { TagInput } from '@/components/tag-input'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -64,6 +66,7 @@ import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import { ModelPricingPanel } from '@/features/model-pricing/model-pricing-panel'
+import { MODEL_MODALITY_OPTIONS } from '@/lib/model-modalities'
 import { ROLE } from '@/lib/roles'
 import {
   requireServerSuccess,
@@ -501,6 +504,107 @@ export function ModelMutateDrawer(props: {
                       />
                     </SideDrawerSection>
 
+                    <SideDrawerSection>
+                      <FormField
+                        control={form.control}
+                        name='model_type'
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>{t('Model type')}</FormLabel>
+                            <FormControl>
+                              <Combobox
+                                value={field.value}
+                                onValueChange={(value) =>
+                                  field.onChange(value || '')
+                                }
+                                options={[
+                                  { value: '', label: t('Automatic') },
+                                  { value: 'chat', label: t('Chat') },
+                                  {
+                                    value: 'embedding',
+                                    label: t('Embeddings'),
+                                  },
+                                  { value: 'rerank', label: t('Rerank') },
+                                  {
+                                    value: 'image',
+                                    label: t('Image generation'),
+                                  },
+                                  { value: 'audio', label: t('Audio') },
+                                  { value: 'video', label: t('Video') },
+                                ]}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      {(['input_modalities', 'output_modalities'] as const).map(
+                        (name) => (
+                          <FormField
+                            key={name}
+                            control={form.control}
+                            name={name}
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>
+                                  {name === 'input_modalities'
+                                    ? t('Input modalities')
+                                    : t('Output modalities')}
+                                </FormLabel>
+                                <FormControl>
+                                  <MultiSelect
+                                    selected={field.value || []}
+                                    onChange={field.onChange}
+                                    placeholder={t('Unrestricted when empty')}
+                                    options={MODEL_MODALITY_OPTIONS.filter(
+                                      (modality) =>
+                                        name === 'output_modalities' ||
+                                        modality.value !== 'embedding'
+                                    ).map((modality) => ({
+                                      value: modality.value,
+                                      label: t(modality.label),
+                                    }))}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        )
+                      )}
+                      <FormField
+                        control={form.control}
+                        name='context_length'
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>{t('Context length')}</FormLabel>
+                            <FormControl>
+                              <Input
+                                type='number'
+                                min={0}
+                                max={2147483647}
+                                step={1}
+                                value={field.value || ''}
+                                onChange={(event) =>
+                                  field.onChange(
+                                    event.target.value === ''
+                                      ? 0
+                                      : event.target.valueAsNumber
+                                  )
+                                }
+                              />
+                            </FormControl>
+                            <FormDescription>
+                              {t(
+                                'Set the context length in tokens to allow automatic Responses compaction.'
+                              )}
+                            </FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </SideDrawerSection>
+
                     {/* Endpoints Configuration */}
                     <SideDrawerSection>
                       <div className='flex items-center justify-between'>
@@ -522,6 +626,48 @@ export function ModelMutateDrawer(props: {
 
                       <FormField
                         control={form.control}
+                        name='endpoint_mode'
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>{t('Endpoint mode')}</FormLabel>
+                            <FormControl>
+                              <RadioGroup
+                                value={field.value}
+                                onValueChange={field.onChange}
+                                className='flex gap-6'
+                              >
+                                <div className='flex items-center gap-2'>
+                                  <RadioGroupItem
+                                    id='endpoint-whitelist'
+                                    value='whitelist'
+                                  />
+                                  <Label htmlFor='endpoint-whitelist'>
+                                    {t('Whitelist')}
+                                  </Label>
+                                </div>
+                                <div className='flex items-center gap-2'>
+                                  <RadioGroupItem
+                                    id='endpoint-blacklist'
+                                    value='blacklist'
+                                  />
+                                  <Label htmlFor='endpoint-blacklist'>
+                                    {t('Blacklist')}
+                                  </Label>
+                                </div>
+                              </RadioGroup>
+                            </FormControl>
+                            <FormDescription>
+                              {t(
+                                'Whitelist accepts only listed protocols. Blacklist blocks listed protocols; leave it empty to allow all.'
+                              )}
+                            </FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
                         name='endpoints'
                         render={({ field }) => (
                           <FormItem>
@@ -540,10 +686,30 @@ export function ModelMutateDrawer(props: {
                                 )}
                               />
                             </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </SideDrawerSection>
+
+                    <SideDrawerSection>
+                      <FormField
+                        control={form.control}
+                        name='websocket_mode'
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>
+                              {t('Responses WebSocket mode')}
+                            </FormLabel>
+                            <FormControl>
+                              <ResponsesWebSocketModeSelect
+                                inherit
+                                value={field.value || 'inherit'}
+                                onChange={field.onChange}
+                              />
+                            </FormControl>
                             <FormDescription>
-                              {t(
-                                'Only the configured API protocols are accepted. Leave empty to infer protocols from channels.'
-                              )}
+                              {t('Model settings override channel settings.')}
                             </FormDescription>
                             <FormMessage />
                           </FormItem>

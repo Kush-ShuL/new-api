@@ -41,6 +41,7 @@ html[data-glass-ui] [data-slot='sidebar-inner'],
 html[data-glass-ui] [data-slot='card'],
 html[data-glass-ui] [data-slot='table-container'],
 html[data-glass-ui] [data-slot='data-table-card'],
+html[data-glass-ui] [data-slot='static-data-table'],
 html[data-glass-ui] .bg-card,
 html[data-glass-ui] .glass-surface {
   background-color: color-mix(
@@ -58,6 +59,21 @@ html[data-glass-ui] [data-slot='data-table-card'][data-state='selected'] {
       var(--glass-opacity, 85%),
     transparent
   );
+}
+
+/* Keep the card's backdrop separate so nested controls can also frost content. */
+html[data-glass-ui] [data-slot='data-table-card'] {
+  backdrop-filter: none;
+}
+
+html[data-glass-ui] [data-slot='data-table-card']::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  backdrop-filter: blur(var(--glass-blur, 20px)) saturate(120%);
 }
 
 html[data-glass-ui] .bg-card .bg-card,
@@ -124,11 +140,35 @@ html[data-glass-ui] [data-slot='sidebar-inset']::before {
   backdrop-filter: blur(var(--glass-blur, 20px)) saturate(120%);
 }
 
-/* Reading surfaces and floating controls stay opaque enough in both themes. */
+/* Floating surfaces share the configured glass opacity and blur. */
 html[data-glass-ui] [role='dialog'],
 html[data-glass-ui] [role='menu'],
-html[data-glass-ui] [data-slot='popover-content'] {
-  background-color: var(--background);
+html[data-glass-ui] [data-slot='popover-content'],
+html[data-glass-ui] [data-slot='select-content'],
+html[data-glass-ui] [data-slot='combobox-content'],
+html[data-glass-ui] [data-slot='dropdown-menu-content'],
+html[data-glass-ui] [data-slot='dropdown-menu-sub-content'] {
+  background-color: color-mix(
+    in srgb,
+    var(--background) var(--glass-opacity, 85%),
+    transparent
+  );
+  backdrop-filter: blur(var(--glass-blur, 20px)) saturate(120%);
+}
+
+html[data-glass-ui] [data-slot='popover-content'] [data-slot='command'],
+html[data-glass-ui] [data-slot='dialog-content'] [data-slot='command'] {
+  background-color: transparent;
+}
+
+/* Drawers already frost their complete surface; chrome shares that backdrop. */
+html[data-glass-ui] .drawer-chrome {
+  background-color: transparent;
+  backdrop-filter: none;
+}
+
+html[data-glass-ui] .overview-setup-backdrop {
+  display: none;
 }
 
 /* Frozen cells and headers use their own blur to soften content scrolling
@@ -150,12 +190,6 @@ html[data-glass-ui] [data-slot='table-header'] [data-slot='table-head'] {
 
 html[data-glass-ui] [data-slot='table-header'] [data-slot='table-row'] {
   background-color: transparent;
-}
-
-/* Rows are clipped below a translucent sticky header instead of painting
-   through it. This preserves the configured glass opacity. */
-html[data-glass-ui] [data-table-scroll-viewport] [data-slot='table-body'] {
-  clip-path: inset(var(--table-scroll-top, 0px) 0 0);
 }
 
 html[data-glass-ui] [data-slot='table-head'][scope='row'].sticky {
@@ -205,6 +239,181 @@ html[data-glass-ui]
       var(--glass-opacity, 85%),
     transparent
   );
+}
+
+/* Static tables share one glass surface instead of stacking opaque cells. */
+html[data-glass-ui]
+  [data-slot='static-data-table']
+  [data-slot='table-container'],
+html[data-glass-ui] [data-slot='static-data-table'] [data-slot='table-header'],
+html[data-glass-ui] [data-slot='static-data-table'] [data-slot='table-cell'] {
+  background-color: transparent;
+  backdrop-filter: none;
+}
+
+/* Reuse independently rounded glass for management tables. Text and controls
+   stay above the surfaces; rows remain available to the backdrop underneath. */
+.table-scroll-glass {
+  position: sticky;
+  left: 0;
+  pointer-events: none;
+  background-color: var(--background);
+}
+
+.table-scroll-header-glass,
+.table-scroll-left-corner-glass,
+.table-scroll-right-corner-glass {
+  top: 0;
+  height: var(--table-header-height);
+  margin-bottom: calc(-1 * var(--table-header-height));
+  background-color: var(--table-header);
+}
+
+.table-scroll-header-glass {
+  z-index: 20;
+  width: var(--table-viewport-width);
+  border-radius: var(--table-inner-radius) var(--table-inner-radius) 0 0;
+  clip-path: inset(
+    0 calc(-1 * var(--table-scrollbar-width)) 0 0 round
+      var(--table-inner-radius) var(--table-inner-radius) 0 0
+  );
+}
+
+.table-scroll-left-glass,
+.table-scroll-right-glass {
+  top: var(--table-header-height);
+  z-index: 5;
+  height: calc(var(--table-viewport-height) - var(--table-header-height));
+  margin-bottom: calc(
+    var(--table-header-height) - var(--table-viewport-height)
+  );
+}
+
+.table-scroll-left-glass,
+.table-scroll-left-corner-glass {
+  display: none;
+  width: var(--table-left-width);
+}
+
+.table-scroll-right-glass,
+.table-scroll-right-corner-glass {
+  display: none;
+  right: 0;
+  left: auto;
+  width: var(--table-right-width);
+  margin-left: auto;
+}
+
+[data-pinned-left] > div > .table-scroll-left-glass,
+[data-pinned-left] > div > .table-scroll-left-corner-glass,
+[data-pinned-right] > div > .table-scroll-right-glass,
+[data-pinned-right] > div > .table-scroll-right-corner-glass {
+  display: block;
+}
+
+.table-scroll-left-glass {
+  border-radius: 0 0 0 var(--table-inner-radius);
+  clip-path: inset(
+    0 0 calc(-1 * var(--table-scrollbar-height)) 0 round 0 0 0
+      var(--table-inner-radius)
+  );
+}
+
+.table-scroll-right-glass {
+  border-radius: 0 0 var(--table-inner-radius) 0;
+  clip-path: inset(
+    0 calc(-1 * var(--table-scrollbar-width))
+      calc(-1 * var(--table-scrollbar-height)) 0 round 0 0
+      var(--table-inner-radius) 0
+  );
+}
+
+.table-scroll-left-corner-glass,
+.table-scroll-right-corner-glass {
+  z-index: 40;
+}
+
+.table-scroll-left-corner-glass {
+  border-radius: var(--table-inner-radius) 0 0 0;
+  clip-path: inset(0 round var(--table-inner-radius) 0 0 0);
+}
+
+.table-scroll-right-corner-glass {
+  border-radius: 0 var(--table-inner-radius) 0 0;
+  clip-path: inset(
+    0 calc(-1 * var(--table-scrollbar-width)) 0 0 round 0
+      var(--table-inner-radius) 0 0
+  );
+}
+
+.table-scroll-area [data-slot='table-header'] {
+  position: static;
+  background: transparent;
+}
+
+.table-scroll-area [data-slot='table'] {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.table-scroll-area [data-slot='table-head'],
+.table-scroll-area [data-slot='table-cell'] {
+  border-bottom: 0.5px solid var(--border);
+}
+
+.table-scroll-area
+  [data-slot='table-body']
+  [data-slot='table-row']:last-child
+  [data-slot='table-cell'] {
+  border-bottom: 0;
+}
+
+.table-scroll-area [data-slot='table-head'] {
+  position: sticky;
+  top: var(--table-header-top, 0px);
+  z-index: 30;
+  background: transparent;
+}
+
+.table-scroll-area [data-slot='table-head'].sticky {
+  z-index: 50;
+}
+
+.table-scroll-area [data-slot='table-cell'].sticky {
+  background: transparent;
+}
+
+/* Give cell content an explicit paint order below the sticky glass, including
+   badges and avatars that create their own stacking contexts. */
+.table-scroll-area
+  [data-slot='table-body']
+  [data-slot='table-cell']:not(.sticky) {
+  position: relative;
+  z-index: 0;
+}
+
+html[data-glass-ui] .table-scroll-glass {
+  background-color: color-mix(
+    in srgb,
+    var(--background) var(--glass-opacity, 85%),
+    transparent
+  );
+  backdrop-filter: blur(calc(var(--glass-blur, 20px) * 1.5)) saturate(120%);
+}
+
+html[data-glass-ui] .table-scroll-left-corner-glass,
+html[data-glass-ui] .table-scroll-right-corner-glass {
+  background-color: transparent;
+}
+
+html[data-glass-ui] .table-scroll-area [data-slot='table-header'],
+html[data-glass-ui]
+  .table-scroll-area
+  [data-slot='table-header']
+  [data-slot='table-head'],
+html[data-glass-ui] .table-scroll-area [data-slot='table-cell'].sticky {
+  background-color: transparent;
+  backdrop-filter: none;
 }
 
 .availability-table {
@@ -297,6 +506,7 @@ html.dark[data-glass-ui] .availability-table {
 /* Let sticky glass surfaces sample the scrolling table, without an ancestor
    blur isolating their backdrop. */
 html[data-glass-ui] .availability-table,
+html[data-glass-ui] .availability-table [data-slot='static-data-table'],
 html[data-glass-ui] .availability-table [data-slot='table-header'] {
   background-color: transparent;
   backdrop-filter: none;

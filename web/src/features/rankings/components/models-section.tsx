@@ -22,7 +22,7 @@ import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { useChartTheme } from '@/lib/use-chart-theme'
-import { VCHART_OPTION } from '@/lib/vchart'
+import { CHART_TOOLTIP, VCHART_OPTION } from '@/lib/vchart'
 
 import { formatTokens } from '../lib/format'
 import type { ModelHistorySeries, ModelRanking, RankingPeriod } from '../types'
@@ -110,6 +110,7 @@ export function ModelsSection(props: ModelsSectionProps) {
         },
       ],
       tooltip: {
+        ...CHART_TOOLTIP,
         mark: {
           content: [
             {

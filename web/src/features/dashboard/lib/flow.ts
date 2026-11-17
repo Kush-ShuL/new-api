@@ -32,6 +32,7 @@ import type {
   FlowSummary,
   ProcessedFlowData,
 } from '@/features/dashboard/types'
+import { CHART_TOOLTIP } from '@/lib/vchart'
 
 import { getDashboardChartColors } from './charts'
 
@@ -1313,6 +1314,7 @@ export function buildFlowSankeySpec(
     // highlight.
     emphasis: { enable: false },
     tooltip: {
+      ...CHART_TOOLTIP,
       trigger: 'hover',
       activeType: 'mark',
       dimension: { visible: false },

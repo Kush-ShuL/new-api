@@ -40,6 +40,10 @@ type Model struct {
 	Tags               string         `json:"tags,omitempty" gorm:"type:varchar(255)"`
 	VendorID           int            `json:"vendor_id,omitempty" gorm:"index"`
 	Endpoints          string         `json:"endpoints,omitempty" gorm:"type:text"`
+	ModelType          string         `json:"model_type,omitempty" gorm:"size:32"`
+	ContextLength      int            `json:"context_length,omitempty"`
+	InputModalities    []string       `json:"input_modalities,omitempty" gorm:"serializer:json;type:text"`
+	OutputModalities   []string       `json:"output_modalities,omitempty" gorm:"serializer:json;type:text"`
 	SupportedEndpoints []string       `json:"supported_endpoints,omitempty" gorm:"-"`
 	Status             int            `json:"status" gorm:"default:1"`
 	SyncOfficial       int            `json:"sync_official" gorm:"default:1"`
@@ -234,6 +238,9 @@ func SearchModelsWithChannels(keyword, vendor, status, syncOfficial string, offs
 }
 
 func (mi *Model) Insert() error {
+	if err := mi.ValidateCapabilities(); err != nil {
+		return err
+	}
 	return metadataTransaction(func(tx *gorm.DB) error {
 		if err := validateModelVendor(tx, mi.VendorID); err != nil {
 			return err
@@ -259,6 +266,9 @@ func IsModelNameDuplicated(id int, name string) (bool, error) {
 }
 
 func (mi *Model) Update() error {
+	if err := mi.ValidateCapabilities(); err != nil {
+		return err
+	}
 	var previous Model
 	err := metadataTransaction(func(tx *gorm.DB) error {
 		if err := tx.Select("icon", "description").First(&previous, mi.Id).Error; err != nil {
@@ -269,7 +279,7 @@ func (mi *Model) Update() error {
 		}
 		mi.UpdatedTime = common.GetTimestamp()
 		return tx.Model(&Model{}).Where("id = ?", mi.Id).
-			Select("model_name", "description", "icon", "tags", "vendor_id", "endpoints", "status", "sync_official", "name_rule", "updated_time").Updates(mi).Error
+			Select("model_name", "description", "icon", "tags", "vendor_id", "endpoints", "model_type", "context_length", "input_modalities", "output_modalities", "status", "sync_official", "name_rule", "updated_time").Updates(mi).Error
 	})
 	if err == nil {
 		CleanupReplacedUploadedImages(previous.Icon, previous.Description)

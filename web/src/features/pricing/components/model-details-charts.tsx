@@ -25,7 +25,7 @@ import { getSuccessRateColor } from '@/features/performance-metrics/lib/format'
 import { useThemeRadiusPx } from '@/lib/theme-radius'
 import { useChartTheme } from '@/lib/use-chart-theme'
 import { cn } from '@/lib/utils'
-import { VCHART_OPTION } from '@/lib/vchart'
+import { CHART_TOOLTIP, VCHART_OPTION } from '@/lib/vchart'
 
 import type { LatencyTimePoint, UptimeDayPoint } from '../lib/mock-stats'
 
@@ -124,6 +124,7 @@ export function LatencyTrendChart(props: {
       },
       legends: { visible: false },
       tooltip: {
+        ...CHART_TOOLTIP,
         mark: {
           title: { value: (d: { time: string }) => d.time },
           content: [
@@ -237,6 +238,7 @@ export function UptimeTrendChart(props: {
         },
       },
       tooltip: {
+        ...CHART_TOOLTIP,
         mark: {
           title: {
             value: (d: { date: string }) => stripUptimePointSuffix(d.date),
@@ -373,6 +375,7 @@ export function ThroughputBarChart(props: {
         },
       ],
       tooltip: {
+        ...CHART_TOOLTIP,
         mark: {
           title: { value: (d: { group: string }) => d.group },
           content: [

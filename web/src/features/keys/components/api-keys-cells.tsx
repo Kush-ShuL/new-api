@@ -85,7 +85,7 @@ export function ApiKeyCell({ apiKey }: { apiKey: ApiKey }) {
   }
 
   return (
-    <div className='flex max-w-full min-w-0 items-center'>
+    <div className='flex max-w-56 min-w-0 items-center gap-1'>
       <Popover open={popoverOpen} onOpenChange={handlePopoverOpen}>
         <PopoverTrigger render={<MaskedValueTrigger />}>
           <span className='truncate'>{maskedKey}</span>

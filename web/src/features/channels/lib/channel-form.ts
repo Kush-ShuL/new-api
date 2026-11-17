@@ -25,6 +25,7 @@ import {
   CHANNEL_TYPE_TASK_PLUGIN,
   CHANNEL_TYPE_VLLM,
   CHANNEL_TYPE_SGLANG,
+  CHANNEL_TYPE_AGGREGATE,
   CHANNEL_STATUS,
   ERROR_MESSAGES,
   FIELD_PASSTHROUGH_TYPES,
@@ -254,6 +255,11 @@ export const channelFormSchema = z
       .optional()
       .refine(isOptionalJsonObject, ERROR_MESSAGES.INVALID_JSON),
     advanced_custom: z.string().optional(),
+    aggregate_chat_path: z.string().optional(),
+    aggregate_messages_path: z.string().optional(),
+    aggregate_responses_path: z.string().optional(),
+    aggregate_models_path: z.string().optional(),
+    aggregate_websocket: z.boolean().optional(),
     other: z.string().optional(),
     // Multi-key options (not sent to backend directly)
     multi_key_mode: z.enum(['single', 'batch', 'multi_to_single']).optional(),
@@ -271,7 +277,9 @@ export const channelFormSchema = z
     http2_connection_shards: z.number().int().optional(),
     tls_insecure_skip_verify: z.boolean().optional(),
     pass_through_body_enabled: z.boolean().optional(),
-    responses_websocket_enabled: z.boolean().optional(),
+    responses_websocket_mode: z
+      .enum(['pool', 'passthrough', 'http_bridge'])
+      .optional(),
     system_prompt: z.string().optional(),
     system_prompt_override: z.boolean().optional(),
     // Type-specific settings (stored in settings JSON)
@@ -298,6 +306,43 @@ export const channelFormSchema = z
     upstream_model_update_ignored_models: z.string().optional(),
   })
   .superRefine((data, ctx) => {
+    if (data.type === CHANNEL_TYPE_AGGREGATE) {
+      if (
+        ![
+          data.aggregate_chat_path,
+          data.aggregate_messages_path,
+          data.aggregate_responses_path,
+        ].some((path) => path?.trim())
+      ) {
+        addRequiredIssue(
+          ctx,
+          'aggregate_chat_path',
+          'Configure at least one upstream protocol'
+        )
+      }
+      for (const field of [
+        'aggregate_chat_path',
+        'aggregate_messages_path',
+        'aggregate_responses_path',
+        'aggregate_models_path',
+      ] as const) {
+        const path = data[field]?.trim()
+        if (path && !path.startsWith('/') && !/^https?:\/\//.test(path)) {
+          addRequiredIssue(
+            ctx,
+            field,
+            'Enter a full URL or a path starting with /'
+          )
+        }
+      }
+      if (data.aggregate_websocket && !data.aggregate_responses_path?.trim()) {
+        addRequiredIssue(
+          ctx,
+          'aggregate_responses_path',
+          'Native WebSocket requires a Responses endpoint'
+        )
+      }
+    }
     if (
       [
         3,
@@ -308,6 +353,7 @@ export const channelFormSchema = z
         CHANNEL_TYPE_TASK_PLUGIN,
         CHANNEL_TYPE_VLLM,
         CHANNEL_TYPE_SGLANG,
+        CHANNEL_TYPE_AGGREGATE,
       ].includes(data.type) &&
       !data.base_url?.trim()
     ) {
@@ -466,7 +512,7 @@ export const CHANNEL_FORM_DEFAULT_VALUES: ChannelFormValues = {
   http2_connection_shards: 1,
   tls_insecure_skip_verify: false,
   pass_through_body_enabled: false,
-  responses_websocket_enabled: false,
+  responses_websocket_mode: 'http_bridge',
   system_prompt: '',
   system_prompt_override: false,
   // Type-specific settings
@@ -491,6 +537,11 @@ export const CHANNEL_FORM_DEFAULT_VALUES: ChannelFormValues = {
   upstream_model_update_auto_sync_enabled: false,
   upstream_model_update_ignored_models: '',
   advanced_custom: '',
+  aggregate_chat_path: '/v1/chat/completions',
+  aggregate_messages_path: '/v1/messages',
+  aggregate_responses_path: '/v1/responses',
+  aggregate_models_path: '/v1/models',
+  aggregate_websocket: false,
 }
 
 // ============================================================================
@@ -514,7 +565,10 @@ export function transformChannelToFormDefaults(
     http2_connection_shards: 1,
     tls_insecure_skip_verify: false,
     pass_through_body_enabled: false,
-    responses_websocket_enabled: false,
+    responses_websocket_mode: 'http_bridge' as
+      | 'pool'
+      | 'passthrough'
+      | 'http_bridge',
     system_prompt: '',
     system_prompt_override: false,
   }
@@ -536,8 +590,8 @@ export function transformChannelToFormDefaults(
         http2_connection_shards: protocol === HTTP_PROTOCOL_HTTP1 ? 1 : shards,
         tls_insecure_skip_verify: parsed.tls_insecure_skip_verify === true,
         pass_through_body_enabled: parsed.pass_through_body_enabled || false,
-        responses_websocket_enabled:
-          parsed.responses_websocket_enabled === true,
+        responses_websocket_mode:
+          parsed.responses_websocket_mode || 'http_bridge',
         system_prompt: parsed.system_prompt || '',
         system_prompt_override: parsed.system_prompt_override || false,
       }
@@ -568,10 +622,18 @@ export function transformChannelToFormDefaults(
   let upstreamModelUpdateAutoSyncEnabled = false
   let upstreamModelUpdateIgnoredModels = ''
   let advancedCustom = ''
+  let aggregate: {
+    chat_path?: string
+    messages_path?: string
+    responses_path?: string
+    models_path?: string
+    websocket?: boolean
+  } = {}
 
   if (channel.settings) {
     try {
       const parsed = JSON.parse(channel.settings)
+      aggregate = parsed.aggregate || {}
       vertexKeyType = parsed.vertex_key_type || 'json'
       vertexProjectId = parsed.vertex_project_id || ''
       vertexApiVersion =
@@ -656,6 +718,11 @@ export function transformChannelToFormDefaults(
     upstream_model_update_auto_sync_enabled: upstreamModelUpdateAutoSyncEnabled,
     upstream_model_update_ignored_models: upstreamModelUpdateIgnoredModels,
     advanced_custom: advancedCustom,
+    aggregate_chat_path: aggregate.chat_path || '',
+    aggregate_messages_path: aggregate.messages_path || '',
+    aggregate_responses_path: aggregate.responses_path || '',
+    aggregate_models_path: aggregate.models_path || '',
+    aggregate_websocket: aggregate.websocket === true,
   }
 }
 
@@ -677,9 +744,9 @@ export function buildSettingJSON(formData: ChannelFormValues): string {
     thinking_to_content: formData.thinking_to_content || false,
     proxy: formData.proxy?.trim() || '',
     pass_through_body_enabled: formData.pass_through_body_enabled === true,
-    responses_websocket_enabled:
-      supportsResponsesWebSocket(formData.type) &&
-      formData.responses_websocket_enabled === true,
+    responses_websocket_mode: supportsResponsesWebSocket(formData.type)
+      ? formData.responses_websocket_mode || 'http_bridge'
+      : undefined,
     system_prompt: formData.system_prompt || '',
     system_prompt_override: formData.system_prompt_override || false,
   }
@@ -844,6 +911,12 @@ function buildSettingsJSON(formData: ChannelFormValues): string {
     }
   }
 
+  if (formData.type === CHANNEL_TYPE_AGGREGATE) {
+    settingsObj.aggregate = buildAggregateConfig(formData)
+  } else {
+    delete settingsObj.aggregate
+  }
+
   if (formData.type === CHANNEL_TYPE_ADVANCED_CUSTOM) {
     const advancedCustomConfig = parseAdvancedCustomConfig(
       formData.advanced_custom
@@ -856,6 +929,25 @@ function buildSettingsJSON(formData: ChannelFormValues): string {
   }
 
   return JSON.stringify(settingsObj)
+}
+
+export function buildAggregateConfig(
+  formData: Pick<
+    ChannelFormValues,
+    | 'aggregate_chat_path'
+    | 'aggregate_messages_path'
+    | 'aggregate_responses_path'
+    | 'aggregate_models_path'
+    | 'aggregate_websocket'
+  >
+) {
+  return {
+    chat_path: formData.aggregate_chat_path?.trim(),
+    messages_path: formData.aggregate_messages_path?.trim(),
+    responses_path: formData.aggregate_responses_path?.trim(),
+    models_path: formData.aggregate_models_path?.trim(),
+    websocket: formData.aggregate_websocket === true,
+  }
 }
 
 function normalizeBaseUrl(value: string | undefined): string {

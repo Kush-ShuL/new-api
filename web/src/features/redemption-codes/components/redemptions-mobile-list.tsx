@@ -150,7 +150,7 @@ export function RedemptionsMobileList(props: RedemptionsMobileListProps) {
             </div>
 
             <div className='flex min-w-0 items-center justify-between gap-2'>
-              <div className='min-w-0 flex-1 [&_button:first-child]:max-w-full [&_button:first-child]:truncate [&_button:first-child]:px-0'>
+              <div className='min-w-0 flex-1'>
                 <MaskedValueDisplay
                   label={t('Full Code')}
                   fullValue={redemption.key}

@@ -20,6 +20,7 @@ import {
   CHANNEL_TYPES,
   CHANNEL_TYPE_VLLM,
   CHANNEL_TYPE_SGLANG,
+  CHANNEL_TYPE_AGGREGATE,
 } from '../constants'
 
 // ============================================================================
@@ -49,6 +50,12 @@ export interface ChannelTypeConfig {
  * Configuration for each channel type
  */
 export const CHANNEL_TYPE_CONFIGS: Record<number, ChannelTypeConfig> = {
+  [CHANNEL_TYPE_AGGREGATE]: {
+    id: CHANNEL_TYPE_AGGREGATE,
+    name: CHANNEL_TYPES[CHANNEL_TYPE_AGGREGATE],
+    icon: 'NewAPI',
+    hints: { models: 'All endpoints must expose the same models' },
+  },
   [CHANNEL_TYPE_SGLANG]: {
     id: CHANNEL_TYPE_SGLANG,
     name: CHANNEL_TYPES[CHANNEL_TYPE_SGLANG],

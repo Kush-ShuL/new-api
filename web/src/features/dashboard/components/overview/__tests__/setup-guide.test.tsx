@@ -76,7 +76,31 @@ beforeEach(() => {
           },
         }
       case '/api/user/models':
-        return { data: { success: true, data: ['gpt-4o-mini'] } }
+        return {
+          data: {
+            success: true,
+            data: ['image-model', 'responses-only', 'gpt-4o-mini'],
+          },
+        }
+      case '/api/pricing':
+        return {
+          data: {
+            success: true,
+            vendors: [],
+            data: [
+              { model_name: 'image-model', model_type: 'image' },
+              {
+                model_name: 'responses-only',
+                model_type: 'chat',
+                endpoint_policy: {
+                  mode: 'whitelist',
+                  endpoints: ['openai-response'],
+                },
+              },
+              { model_name: 'gpt-4o-mini', model_type: 'chat' },
+            ],
+          },
+        }
       case '/api/data/self':
         return { data: { success: true, data: [] } }
       default:
@@ -107,6 +131,18 @@ async function renderOverview() {
 }
 
 describe('overview setup guide', () => {
+  it('uses a chat model that accepts chat completions for the first request example', async () => {
+    const user = userEvent.setup()
+    await renderOverview()
+    await user.click(await screen.findByRole('button', { name: 'Setup guide' }))
+    await waitFor(() =>
+      expect(screen.getByTitle(/"model":"gpt-4o-mini"/)).toBeVisible()
+    )
+    expect(screen.queryByTitle(/"model":"image-model"/)).not.toBeInTheDocument()
+    expect(
+      screen.queryByTitle(/"model":"responses-only"/)
+    ).not.toBeInTheDocument()
+  })
   it('shows usage first and only a header entry when setup is complete', async () => {
     await renderOverview()
 

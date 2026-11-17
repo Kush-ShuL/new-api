@@ -185,7 +185,7 @@ export function DataTableBulkActions<TData>({
           className={cn(
             'p-2 shadow-xl',
             'rounded-xl border',
-            'bg-background/95 supports-[backdrop-filter]:bg-background/60 backdrop-blur-lg',
+            'glass-surface bg-background/95 supports-[backdrop-filter]:bg-background/60 backdrop-blur-lg',
             'flex flex-wrap items-center gap-2'
           )}
         >

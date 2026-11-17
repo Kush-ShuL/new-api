@@ -77,6 +77,32 @@ func TestSGLangChannelProtocols(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestAggregatePrefersNativeProtocolsAndConvertsMissingOnes(t *testing.T) {
+	config := &dto.AggregateConfig{ChatPath: "/chat", MessagesPath: "/messages", ResponsesPath: "/responses", ModelsPath: "/models", WebSocket: true}
+	require.NoError(t, config.Validate())
+	for _, tc := range []struct{ incoming, upstream string }{{"/v1/chat/completions", "/chat"}, {"/v1/messages", "/messages"}, {"/v1/responses", "/responses"}} {
+		route, ok := config.Routes().MatchPathForModel(tc.incoming, "shared-model")
+		require.True(t, ok)
+		assert.Equal(t, tc.upstream, route.UpstreamPath)
+		assert.Equal(t, "none", route.Converter)
+	}
+	config.ResponsesPath, config.WebSocket = "", false
+	require.NoError(t, config.Validate())
+	route, ok := config.Routes().MatchPathForModel("/v1/responses", "shared-model")
+	require.True(t, ok)
+	assert.Equal(t, "/chat", route.UpstreamPath)
+	assert.Equal(t, "openai_responses_to_openai_chat_completions", route.Converter)
+	config.ChatPath = ""
+	route, ok = config.Routes().MatchPathForModel("/v1/responses", "shared-model")
+	require.True(t, ok)
+	assert.Equal(t, "/messages", route.UpstreamPath)
+	assert.Equal(t, "openai_responses_to_claude_messages", route.Converter)
+	require.NotNil(t, route.Auth)
+	assert.Equal(t, "x-api-key", route.Auth.Name)
+	config.WebSocket = true
+	require.ErrorContains(t, config.Validate(), "native Responses endpoint")
+}
+
 func TestSGLangRerankRequestAndResponse(t *testing.T) {
 	service.InitHttpClient()
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

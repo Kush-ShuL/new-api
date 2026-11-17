@@ -559,6 +559,14 @@ type GeminiChatResponse struct {
 	HasUsageMetadata bool                      `json:"-"`
 }
 
+func (r GeminiChatResponse) MarshalJSON() ([]byte, error) {
+	return kitutil.Marshal(struct {
+		Candidates     []GeminiChatCandidate     `json:"candidates"`
+		PromptFeedback *GeminiChatPromptFeedback `json:"promptFeedback,omitempty"`
+		UsageMetadata  *GeminiUsageMetadata      `json:"usageMetadata,omitempty"`
+	}{r.Candidates, r.PromptFeedback, r.GetUsageMetadata()})
+}
+
 // UnmarshalJSON records whether Gemini returned usageMetadata while preserving
 // the historical wire shape that always marshals the usageMetadata field.
 //
@@ -602,10 +610,10 @@ type GeminiUsageMetadata struct {
 	TotalTokenCount            int                         `json:"totalTokenCount"`
 	ThoughtsTokenCount         int                         `json:"thoughtsTokenCount"`
 	CachedContentTokenCount    int                         `json:"cachedContentTokenCount"`
-	PromptTokensDetails        []GeminiPromptTokensDetails `json:"promptTokensDetails"`
-	ToolUsePromptTokensDetails []GeminiPromptTokensDetails `json:"toolUsePromptTokensDetails"`
-	CandidatesTokensDetails    []GeminiPromptTokensDetails `json:"candidatesTokensDetails"`
-	BillingUsage               *BillingUsage               `json:"billing_usage,omitempty"`
+	PromptTokensDetails        []GeminiPromptTokensDetails `json:"promptTokensDetails,omitempty"`
+	ToolUsePromptTokensDetails []GeminiPromptTokensDetails `json:"toolUsePromptTokensDetails,omitempty"`
+	CandidatesTokensDetails    []GeminiPromptTokensDetails `json:"candidatesTokensDetails,omitempty"`
+	BillingUsage               *BillingUsage               `json:"-"`
 }
 
 type GeminiPromptTokensDetails struct {

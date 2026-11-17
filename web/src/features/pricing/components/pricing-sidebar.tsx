@@ -27,7 +27,17 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { getLobeIcon } from '@/lib/lobe-icon'
+import {
+  MODEL_INPUT_MODALITY_OPTIONS,
+  MODEL_MODALITY_OPTIONS,
+} from '@/lib/model-modalities'
 import { cn } from '@/lib/utils'
 
 import {
@@ -35,10 +45,15 @@ import {
   FILTER_ALL,
   QUOTA_TYPES,
   getEndpointTypeLabels,
+  getModelTypeLabels,
   getQuotaTypeLabels,
 } from '../constants'
 import { getModelQuotaType, parseTags } from '../lib/filters'
-import type { PricingModel, PricingVendor } from '../types'
+import type {
+  ModelCapabilityFilters,
+  PricingModel,
+  PricingVendor,
+} from '../types'
 
 type FilterOption = {
   value: string
@@ -61,6 +76,8 @@ export interface PricingSidebarProps {
   vendorFilter: string
   groupFilter: string
   tagFilter: string
+  capabilityFilters: ModelCapabilityFilters
+  onCapabilityFiltersChange: (updates: Partial<ModelCapabilityFilters>) => void
   onQuotaTypeChange: (value: string) => void
   onEndpointTypeChange: (value: string) => void
   onVendorChange: (value: string) => void
@@ -147,6 +164,56 @@ function FilterSection(props: FilterSectionProps) {
   )
 }
 
+function ModalityFilter(props: {
+  direction: 'input' | 'output'
+  title: string
+  value: string[]
+  onChange: (value: string[]) => void
+}) {
+  const { t } = useTranslation()
+  const options =
+    props.direction === 'input'
+      ? MODEL_INPUT_MODALITY_OPTIONS
+      : MODEL_MODALITY_OPTIONS
+  return (
+    <div className='border-border/70 space-y-2 border-b py-3'>
+      <p className='text-sm font-semibold'>{props.title}</p>
+      <ToggleGroup
+        multiple
+        value={props.value}
+        onValueChange={props.onChange}
+        aria-label={props.title}
+        spacing={1}
+        className={cn(
+          'grid w-full min-w-0 gap-0.5',
+          props.direction === 'input' ? 'grid-cols-5' : 'grid-cols-6'
+        )}
+      >
+        {options.map((modality) => (
+          <Tooltip key={modality.value}>
+            <TooltipTrigger
+              render={
+                <ToggleGroupItem
+                  value={modality.value}
+                  aria-label={`${props.title}: ${t(modality.label)}`}
+                  className='h-7 w-full min-w-0 rounded-md p-0'
+                />
+              }
+            >
+              <modality.icon
+                aria-hidden
+                className='size-3.5'
+                strokeWidth={1.8}
+              />
+            </TooltipTrigger>
+            <TooltipContent>{t(modality.label)}</TooltipContent>
+          </Tooltip>
+        ))}
+      </ToggleGroup>
+    </div>
+  )
+}
+
 export const PricingSidebar = memo(function PricingSidebar(
   props: PricingSidebarProps
 ) {
@@ -178,6 +245,13 @@ export const PricingSidebar = memo(function PricingSidebar(
   }, [props.models])
   const quotaTypeLabels = getQuotaTypeLabels(t)
   const endpointTypeLabels = getEndpointTypeLabels(t)
+  const modelTypeOptions: FilterOption[] = [
+    { value: FILTER_ALL, label: t('All Models') },
+    ...Object.entries(getModelTypeLabels(t)).map(([value, label]) => ({
+      value,
+      label,
+    })),
+  ]
 
   const vendorOptions: FilterOption[] = [
     {
@@ -259,7 +333,9 @@ export const PricingSidebar = memo(function PricingSidebar(
   ]
 
   return (
-    <aside className={cn('bg-card rounded-xl border p-3', props.className)}>
+    <aside
+      className={cn('glass-surface rounded-xl border p-3', props.className)}
+    >
       <div className='mb-2.5 flex items-center justify-between gap-2'>
         <div>
           <h2 className='text-foreground text-sm font-bold'>{t('Filter')}</h2>
@@ -310,6 +386,44 @@ export const PricingSidebar = memo(function PricingSidebar(
           value={props.quotaTypeFilter}
           options={quotaOptions}
           onChange={props.onQuotaTypeChange}
+        />
+        <FilterSection
+          title={t('Model type')}
+          value={props.capabilityFilters.modelType}
+          options={modelTypeOptions}
+          onChange={(modelType) =>
+            props.onCapabilityFiltersChange({ modelType })
+          }
+        />
+        <ModalityFilter
+          direction='input'
+          title={t('Input')}
+          value={props.capabilityFilters.inputModalities}
+          onChange={(inputModalities) =>
+            props.onCapabilityFiltersChange({ inputModalities })
+          }
+        />
+        <ModalityFilter
+          direction='output'
+          title={t('Output')}
+          value={props.capabilityFilters.outputModalities}
+          onChange={(outputModalities) =>
+            props.onCapabilityFiltersChange({ outputModalities })
+          }
+        />
+        <FilterSection
+          title={t('Context length')}
+          value={String(props.capabilityFilters.minContext)}
+          options={[
+            { value: '0', label: t('All') },
+            { value: '32768', label: '≥ 32K' },
+            { value: '131072', label: '≥ 128K' },
+            { value: '262144', label: '≥ 256K' },
+            { value: '1000000', label: '≥ 1M' },
+          ]}
+          onChange={(value) =>
+            props.onCapabilityFiltersChange({ minContext: Number(value) })
+          }
         />
         <FilterSection
           title={t('Endpoint Type')}

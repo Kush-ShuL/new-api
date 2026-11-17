@@ -18,11 +18,14 @@ import (
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
 	"github.com/QuantumNous/new-api/pkg/jsplugin"
+	"github.com/QuantumNous/new-api/relay"
+	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/billing_setting"
 	"github.com/QuantumNous/new-api/setting/config"
+	"github.com/QuantumNous/new-api/setting/model_setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -30,9 +33,131 @@ import (
 	"gorm.io/gorm"
 )
 
+func TestModelCapabilitiesDatabaseMatrix(t *testing.T) {
+	for _, dialect := range []struct{ kind, env string }{{"sqlite", ""}, {"mysql", "TEST_MYSQL_DSN"}, {"postgres", "TEST_POSTGRES_DSN"}} {
+		t.Run(dialect.kind, func(t *testing.T) {
+			if dialect.env != "" && os.Getenv(dialect.env) == "" {
+				t.Skip("set " + dialect.env)
+			}
+			db := modelManagementDB(t, dialect.kind, os.Getenv(dialect.env))
+			t.Setenv("RESPONSES_CACHE_DIR", t.TempDir())
+			for _, upgrade := range []bool{false, true} {
+				t.Run(fmt.Sprintf("upgrade=%v", upgrade), func(t *testing.T) {
+					require.NoError(t, db.Migrator().DropTable(&model.Model{}))
+					if upgrade {
+						// Existing release schema, prior to explicit capabilities.
+						type legacyModel struct {
+							Id          int
+							ModelName   string         `gorm:"size:128;not null;uniqueIndex:uk_model_name_delete_at,priority:1"`
+							Description string         `gorm:"type:text"`
+							DeletedAt   gorm.DeletedAt `gorm:"index;uniqueIndex:uk_model_name_delete_at,priority:2"`
+						}
+						require.NoError(t, db.Table("models").AutoMigrate(&legacyModel{}))
+						require.NoError(t, db.Table("models").Create(&legacyModel{Id: 99, ModelName: "preserved-model", Description: "existing metadata"}).Error)
+					}
+					for range 2 {
+						require.NoError(t, db.AutoMigrate(&model.Model{}))
+					}
+					if upgrade {
+						var previous model.Model
+						require.NoError(t, db.First(&previous, 99).Error)
+						assert.Equal(t, "existing metadata", previous.Description)
+						assert.Zero(t, previous.ContextLength)
+					}
+					metadata := &model.Model{ModelName: "capability-chat", Status: 1, ModelType: "chat", ContextLength: 64, InputModalities: []string{"text"}, OutputModalities: []string{"text"}}
+					require.NoError(t, metadata.Insert())
+					var persisted model.Model
+					require.NoError(t, db.First(&persisted, metadata.Id).Error)
+					assert.Equal(t, metadata.InputModalities, persisted.InputModalities)
+					assert.Equal(t, metadata.OutputModalities, persisted.OutputModalities)
+					assert.Equal(t, 64, persisted.ContextLength)
+					duplicated, err := model.IsModelNameDuplicated(0, metadata.ModelName)
+					require.NoError(t, err)
+					assert.True(t, duplicated)
+					assert.True(t, db.Migrator().HasIndex(&model.Model{}, "uk_model_name_delete_at"))
+					model.RefreshPricing()
+					c, _ := gin.CreateTestContext(httptest.NewRecorder())
+					c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+					common.SetContextKey(c, constant.ContextKeyOriginalModel, metadata.ModelName)
+					common.SetContextKey(c, constant.ContextKeyUserId, 23)
+					request := &dto.OpenAIResponsesRequest{Model: metadata.ModelName, Input: common.RawMessage(`"hello"`), ContextManagement: common.RawMessage(`[{"type":"compaction"}]`)}
+					require.NoError(t, service.ValidateModelCapabilities(c, request))
+					assert.JSONEq(t, `[{"type":"compaction","compact_threshold":51}]`, string(request.ContextManagement))
+					previousCount := constant.CountToken
+					constant.CountToken = false
+					t.Cleanup(func() { constant.CountToken = previousCount })
+					request.Input, request.MaxOutputTokens = common.RawMessage(`"hello"`), common.GetPointer(uint(100))
+					info := relaycommon.GenRelayInfoResponses(c, request)
+					apiErr := relay.PrepareRequestBilling(c, info)
+					require.NotNil(t, apiErr)
+					assert.Equal(t, http.StatusBadRequest, apiErr.StatusCode)
+					assert.Equal(t, "context_length_exceeded", apiErr.ToOpenAIError().Code)
+					assert.Nil(t, info.Billing)
+					metadata.ContextLength = 0
+					metadata.InputModalities, metadata.OutputModalities = nil, nil
+					require.NoError(t, metadata.Update())
+					model.RefreshPricing()
+					require.ErrorContains(t, service.ValidateResponsesContextManagement(metadata.ModelName, request), "explicit context length")
+					require.NoError(t, db.First(&persisted, metadata.Id).Error)
+					assert.Zero(t, persisted.ContextLength)
+					assert.Empty(t, persisted.InputModalities)
+				})
+			}
+			// Ciphertext authenticates its user and survives gateway restarts using
+			// the key persisted in the shared options table.
+			sealed, err := service.SealResponsesReasoning(23, "# Plan\nprivate reasoning")
+			require.NoError(t, err)
+			opened, err := service.OpenResponsesReasoning(23, sealed)
+			require.NoError(t, err)
+			assert.Equal(t, "# Plan\nprivate reasoning", opened)
+			_, err = service.OpenResponsesReasoning(24, sealed)
+			require.Error(t, err)
+			_, err = service.OpenResponsesReasoning(23, sealed+"x")
+			require.Error(t, err)
+			encryption := model_setting.GetGlobalSettings().ResponsesReasoningEncryption
+			model_setting.GetGlobalSettings().ResponsesReasoningEncryption = true
+			t.Cleanup(func() { model_setting.GetGlobalSettings().ResponsesReasoningEncryption = encryption })
+			c, _ := gin.CreateTestContext(httptest.NewRecorder())
+			c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+			common.SetContextKey(c, constant.ContextKeyUserId, 23)
+			request := &dto.OpenAIResponsesRequest{Model: "capability-chat", Input: common.RawMessage(`"first turn"`)}
+			processor := service.ResponsesOutputProcessor{Context: c, Info: &relaycommon.RelayInfo{FinalRequestRelayFormat: types.RelayFormatOpenAI}, Request: request}
+			response, err := processor.ProcessResponse([]byte(`{"id":"resp_capability","output":[{"type":"reasoning","summary":[{"type":"summary_text","text":"# Plan\nprivate reasoning"}]},{"type":"message","role":"assistant","content":[{"type":"output_text","text":"answer"}]}]}`))
+			require.NoError(t, err)
+			var body struct {
+				Output []struct {
+					Encrypted string `json:"encrypted_content"`
+					Summary   []struct {
+						Text string `json:"text"`
+					} `json:"summary"`
+				} `json:"output"`
+			}
+			require.NoError(t, common.Unmarshal(response, &body))
+			require.Len(t, body.Output, 2)
+			assert.NotEmpty(t, body.Output[0].Encrypted)
+			require.Len(t, body.Output[0].Summary, 1)
+			assert.Equal(t, "Plan", body.Output[0].Summary[0].Text)
+			followup := &dto.OpenAIResponsesRequest{Model: request.Model, PreviousResponseID: "resp_capability", Input: common.RawMessage(`"next turn"`)}
+			require.NoError(t, service.PrepareStatefulResponsesRequest(c, followup))
+			assert.Empty(t, followup.PreviousResponseID)
+			assert.Contains(t, string(followup.Input), "first turn")
+			assert.Contains(t, string(followup.Input), "private reasoning")
+			assert.Contains(t, string(followup.Input), "answer")
+			common.SetContextKey(c, constant.ContextKeyUserId, 24)
+			_, err = service.LoadResponsesContext(c, "resp_capability")
+			require.ErrorIs(t, err, os.ErrNotExist)
+			followup.PreviousResponseID = "resp_capability"
+			require.ErrorContains(t, service.PrepareStatefulResponsesRequest(c, followup), "not found")
+		})
+	}
+}
+
 func modelManagementDB(t *testing.T, kind, dsn string) *gorm.DB {
 	t.Helper()
 	database, isolatedDSN := newAuditTestDatabase(t, kind, dsn)
+	initialConnection, err := database.DB()
+	require.NoError(t, err)
+	require.NoError(t, initialConnection.Close())
 	previousDB, previousLogDB := model.DB, model.LOG_DB
 	previousMain, previousLog := common.MainDatabaseType(), common.LogDatabaseType()
 	previousMaster, previousSQLite := common.IsMasterNode, common.SQLitePath

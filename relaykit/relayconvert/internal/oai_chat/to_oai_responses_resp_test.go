@@ -199,18 +199,57 @@ func TestChatCompletionsStreamToResponsesEventsAggregatesUsageAndToolArgs(t *tes
 	})...)
 	events = append(events, FinalizeChatCompletionsStreamToResponses(state)...)
 
-	require.Len(t, events, 10)
+	require.Len(t, events, 13)
 	assert.Equal(t, responsesEventCreated, events[0].Type)
-	assert.Equal(t, responsesEventOutputTextDelta, events[2].Type)
-	assert.Equal(t, "hello", events[2].Payload.Delta)
-	assert.Equal(t, responsesEventFunctionArgsDelta, events[4].Type)
-	assert.Equal(t, `{"q":"x"}`, events[4].Payload.Delta)
-	assert.Equal(t, responsesEventCompleted, events[9].Type)
-	require.NotNil(t, events[9].Payload.Response)
-	assert.Equal(t, 6, events[9].Payload.Response.Usage.TotalTokens)
-	require.Len(t, events[9].Payload.Response.Output, 2)
-	assert.Equal(t, "hello", events[9].Payload.Response.Output[0].Content[0].Text)
-	assert.Equal(t, `"{\"q\":\"x\"}"`, string(events[9].Payload.Response.Output[1].Arguments))
+	assert.Equal(t, responsesEventOutputTextDelta, events[4].Type)
+	assert.Equal(t, "hello", events[4].Payload.Delta)
+	assert.Equal(t, responsesEventFunctionArgsDelta, events[6].Type)
+	assert.Equal(t, `{"q":"x"}`, events[6].Payload.Delta)
+	completed := events[len(events)-1]
+	assert.Equal(t, responsesEventCompleted, completed.Type)
+	require.NotNil(t, completed.Payload.Response)
+	assert.Equal(t, 6, completed.Payload.Response.Usage.TotalTokens)
+	require.Len(t, completed.Payload.Response.Output, 2)
+	assert.Equal(t, "hello", completed.Payload.Response.Output[0].Content[0].Text)
+	assert.Equal(t, `"{\"q\":\"x\"}"`, string(completed.Payload.Response.Output[1].Arguments))
+}
+
+func TestChatCompletionsStreamToResponsesIncludesFinalFunctionArguments(t *testing.T) {
+	for _, emitSequenceNumber := range []bool{false, true} {
+		for _, arguments := range []string{`{"q":"x"}`, `{}`, ""} {
+			t.Run(map[bool]string{false: "legacy/", true: "sequence_numbers/"}[emitSequenceNumber]+arguments, func(t *testing.T) {
+				state := NewChatToResponsesStreamState("resp_1", "glm-5.2")
+				state.EmitSequenceNumber = emitSequenceNumber
+				toolIndex := 0
+				var events []ChatToResponsesStreamEvent
+				for _, delta := range []dto.ToolCallResponse{
+					{Index: &toolIndex, ID: "call_1", Type: "function", Function: dto.FunctionResponse{Name: "lookup"}},
+					{Index: &toolIndex, Function: dto.FunctionResponse{Arguments: arguments[:len(arguments)/2]}},
+					{Index: &toolIndex, Function: dto.FunctionResponse{Arguments: arguments[len(arguments)/2:]}},
+				} {
+					events = append(events, mustResponsesEventsFromChatChunk(t, state, &dto.ChatCompletionsStreamResponse{
+						Choices: []dto.ChatCompletionsStreamResponseChoice{{
+							Delta: dto.ChatCompletionsStreamResponseChoiceDelta{ToolCalls: []dto.ToolCallResponse{delta}},
+						}},
+					})...)
+				}
+				events = append(events, FinalizeChatCompletionsStreamToResponses(state)...)
+				var done []dto.ResponsesStreamResponse
+				for _, event := range events {
+					if event.Type == responsesEventFunctionArgsDone {
+						done = append(done, event.Payload)
+					}
+				}
+				require.Len(t, done, 1)
+				wire, err := kitutil.Marshal(done[0])
+				require.NoError(t, err)
+				var fields map[string]any
+				require.NoError(t, kitutil.Unmarshal(wire, &fields))
+				assert.Contains(t, fields, "arguments")
+				assert.Equal(t, arguments, fields["arguments"])
+			})
+		}
+	}
 }
 
 func TestChatCompletionsStreamToResponsesEmitsReasoningSummaryPartLifecycle(t *testing.T) {
@@ -238,33 +277,36 @@ func TestChatCompletionsStreamToResponsesEmitsReasoningSummaryPartLifecycle(t *t
 	}
 	assert.Equal(t, []string{
 		responsesEventCreated,
+		"response.in_progress",
 		responsesEventOutputItemAdded,
 		responsesEventReasoningSummaryPartAdded,
 		responsesEventReasoningSummaryDelta,
-		responsesEventOutputItemAdded,
-		responsesEventOutputTextDelta,
-		"response.output_text.done",
-		responsesEventOutputItemDone,
 		responsesEventReasoningSummaryDone,
 		responsesEventReasoningSummaryPartDone,
+		responsesEventOutputItemDone,
+		responsesEventOutputItemAdded,
+		"response.content_part.added",
+		responsesEventOutputTextDelta,
+		"response.output_text.done",
+		"response.content_part.done",
 		responsesEventOutputItemDone,
 		responsesEventCompleted,
 	}, types)
 
 	// The Responses schema requires summary on every reasoning item, including
 	// the one announced before any summary text exists.
-	itemAdded, err := kitutil.Marshal(events[1].Payload)
+	itemAdded, err := kitutil.Marshal(events[2].Payload)
 	require.NoError(t, err)
 	assert.Contains(t, string(itemAdded), `"summary":[]`)
 
-	partAdded := events[2].Payload
+	partAdded := events[3].Payload
 	assert.Equal(t, "resp_1_reasoning_0", partAdded.ItemID)
 	assert.Equal(t, 0, lo.FromPtr(partAdded.OutputIndex))
 	assert.Equal(t, 0, lo.FromPtr(partAdded.SummaryIndex))
 	require.NotNil(t, partAdded.Part)
 	assert.Equal(t, dto.ResponsesReasoningSummaryPart{Type: "summary_text"}, *partAdded.Part)
 
-	partDone := events[9].Payload
+	partDone := events[6].Payload
 	assert.Equal(t, "resp_1_reasoning_0", partDone.ItemID)
 	require.NotNil(t, partDone.Part)
 	assert.Equal(t, dto.ResponsesReasoningSummaryPart{Type: "summary_text", Text: "think"}, *partDone.Part)
@@ -432,6 +474,7 @@ func TestChatCompletionsStreamToResponsesRestoresCustomToolCalls(t *testing.T) {
 	}
 	assert.Equal(t, []string{
 		responsesEventCreated,
+		"response.in_progress",
 		responsesEventOutputItemAdded,
 		responsesEventOutputItemAdded,
 		responsesEventFunctionArgsDelta,
@@ -443,15 +486,15 @@ func TestChatCompletionsStreamToResponsesRestoresCustomToolCalls(t *testing.T) {
 		responsesEventCompleted,
 	}, types)
 
-	added, err := kitutil.Marshal(events[1].Payload.Item)
+	added, err := kitutil.Marshal(events[2].Payload.Item)
 	require.NoError(t, err)
 	assert.JSONEq(t, `{"type":"custom_tool_call","id":"call_exec","status":"in_progress","call_id":"call_exec","name":"exec","input":""}`, string(added))
-	assert.Equal(t, `echo "hi"`, events[4].Payload.Delta)
-	assert.Equal(t, "call_exec", events[4].Payload.ItemID)
-	require.NotNil(t, events[5].Payload.Input)
-	assert.Equal(t, `echo "hi"`, *events[5].Payload.Input)
-	assert.Equal(t, responsesOutputTypeCustomToolCall, events[6].Payload.Item.Type)
-	assert.Equal(t, `"echo \"hi\""`, string(events[6].Payload.Item.Input))
+	assert.Equal(t, `echo "hi"`, events[5].Payload.Delta)
+	assert.Equal(t, "call_exec", events[5].Payload.ItemID)
+	require.NotNil(t, events[6].Payload.Input)
+	assert.Equal(t, `echo "hi"`, *events[6].Payload.Input)
+	assert.Equal(t, responsesOutputTypeCustomToolCall, events[7].Payload.Item.Type)
+	assert.Equal(t, `"echo \"hi\""`, string(events[7].Payload.Item.Input))
 
 	output := events[len(events)-1].Payload.Response.Output
 	require.Len(t, output, 2)
@@ -493,7 +536,7 @@ func TestChatCompletionsStreamToResponsesHoldsNamelessToolUntilNameArrives(t *te
 	t.Run("function tool flushes held arguments", func(t *testing.T) {
 		state := NewChatToResponsesStreamState("resp_1", "gpt-test")
 		first := mustResponsesEventsFromChatChunk(t, state, chunk(dto.ToolCallResponse{Index: &toolIndex, Type: "function", Function: dto.FunctionResponse{Arguments: `{"ms":`}}))
-		require.Len(t, first, 1)
+		require.Len(t, first, 2)
 		assert.Equal(t, responsesEventCreated, first[0].Type)
 		second := mustResponsesEventsFromChatChunk(t, state, chunk(dto.ToolCallResponse{Index: &toolIndex, ID: "call_wait", Function: dto.FunctionResponse{Name: "wait", Arguments: `1}`}}))
 		require.Len(t, second, 2)

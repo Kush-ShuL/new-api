@@ -23,6 +23,7 @@ import { useTranslation } from 'react-i18next'
 import { CopyButton } from '@/components/copy-button'
 import { CurrencyText } from '@/components/currency-display'
 import { ModelIdentity } from '@/components/model-identity'
+import { ModelModalities } from '@/components/model-modalities'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
 import { useModelCustomizations } from '@/hooks/use-model-customizations'
@@ -47,6 +48,7 @@ import { isTokenBasedModel } from '../lib/model-helpers'
 import { formatPrice, formatRequestPrice } from '../lib/price'
 import { taskPriceLabel, taskUsageUnitLabel } from '../lib/task-price-display'
 import type { PricingModel, PriceType, TokenUnit } from '../types'
+import { EndpointPolicy } from './endpoint-policy'
 import { ModelBillingModeBadge } from './model-billing-mode-badge'
 import { ModelPerfBadge, type ModelPerfBadgeData } from './model-perf-badge'
 
@@ -71,7 +73,6 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
   const tokenUnitLabel = tokenUnit === 'K' ? '1K' : '1M'
   const tags = parseTags(props.model.tags)
   const groups = props.model.enable_groups || []
-  const endpoints = props.model.supported_endpoint_types || []
   const custom = useModelCustomizations()[props.model.model_name]
   const modelIconKey =
     custom?.icon || props.model.icon || props.model.vendor_icon
@@ -174,7 +175,7 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
                       {label}
                     </span>
                   )}
-                  <span className='flex flex-wrap items-baseline gap-x-1 font-mono text-sm font-semibold tabular-nums'>
+                  <span className='inline-flex w-max items-baseline gap-x-1 text-sm font-semibold whitespace-nowrap tabular-nums'>
                     <span>
                       <CurrencyText>
                         {entry.formattedRange ?? entry.formatted}
@@ -242,7 +243,7 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
     priceSummary = prices.map((price) => (
       <div key={price.type} className='flex min-w-0 flex-col gap-1'>
         <span className='text-muted-foreground text-xs'>{price.label}</span>
-        <span className='font-mono text-sm font-semibold tabular-nums'>
+        <span className='inline-flex w-max items-baseline gap-x-1 text-sm font-semibold whitespace-nowrap tabular-nums'>
           <CurrencyText>
             {formatPrice(
               props.model,
@@ -264,7 +265,7 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
   } else {
     priceSummary = (
       <div className='col-span-full flex min-w-0 flex-col gap-1'>
-        <span className='font-mono text-sm font-semibold tabular-nums'>
+        <span className='inline-flex w-max items-baseline gap-x-1 text-sm font-semibold whitespace-nowrap tabular-nums'>
           <CurrencyText>
             {formatRequestPrice(
               props.model,
@@ -285,8 +286,9 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
 
   return (
     <Card
+      size='sm'
       className={cn(
-        'hover:ring-foreground/20 relative isolate h-full min-w-0 gap-3 overflow-hidden transition-colors',
+        'model-catalog-card hover:ring-foreground/20 relative isolate h-full min-w-0 gap-3 overflow-hidden transition-colors',
         custom?.background && 'model-card-with-background'
       )}
     >
@@ -302,10 +304,10 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
           <div className='model-card-mask' aria-hidden='true' />
         </div>
       )}
-      <CardHeader className='flex flex-row items-start gap-3'>
+      <CardHeader className='flex min-h-11 flex-row items-start gap-2.5'>
         <div
           aria-hidden
-          className='bg-muted/50 flex size-10 shrink-0 items-center justify-center rounded-lg'
+          className='flex size-11 shrink-0 items-center justify-center rounded-lg'
         >
           {modelIcon || (
             <span className='text-muted-foreground text-sm font-bold'>
@@ -315,7 +317,7 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
         </div>
         <div className='min-w-0 flex-1'>
           <h3
-            className='line-clamp-2 font-mono text-[15px] leading-snug font-semibold [overflow-wrap:anywhere]'
+            className='line-clamp-2 text-[15px] leading-snug font-semibold [overflow-wrap:anywhere]'
             title={props.model.model_name}
           >
             <ModelIdentity name={props.model.model_name} showIcon={false} />
@@ -336,8 +338,8 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
           iconClassName='size-3.5'
         />
       </CardHeader>
-      <CardContent className='flex flex-1 flex-col gap-3'>
-        <div className='flex min-w-0 flex-col gap-1.5'>
+      <CardContent className='flex flex-1 flex-col gap-2.5'>
+        <div className='flex min-h-16 min-w-0 flex-col gap-1.5'>
           <p className='text-muted-foreground line-clamp-2 text-[13px] leading-5 break-words'>
             {props.model.description || t('No description available.')}
           </p>
@@ -359,10 +361,15 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
             </div>
           )}
         </div>
+        <ModelModalities
+          compact
+          input={props.model.input_modalities}
+          output={props.model.output_modalities}
+        />
         <div
           role='group'
           aria-label={t('Pricing')}
-          className='mt-auto flex min-w-0 flex-col gap-1.5'
+          className='flex min-w-0 flex-col gap-2 py-1'
         >
           <ModelBillingModeBadge model={props.model} appearance='caption' />
           {dynamicSummary?.providerCount && (
@@ -378,15 +385,13 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
             {priceSummary}
           </div>
         </div>
-        {(groups.length > 0 || endpoints.length > 0) && (
-          <dl
-            className={cn(
-              'grid min-w-0 grid-cols-2 gap-3 text-xs',
-              (groups.length === 0 || endpoints.length === 0) && 'grid-cols-1'
-            )}
+        {(groups.length > 0 || props.model.endpoint_policy) && (
+          <div
+            data-slot='model-card-metadata'
+            className='flex min-w-0 items-baseline justify-between gap-3 text-xs'
           >
             {groups.length > 0 && (
-              <div className='flex min-w-0 items-baseline gap-1.5'>
+              <dl className='flex min-w-0 flex-1 items-baseline gap-1.5'>
                 <dt className='text-muted-foreground shrink-0'>
                   {t('Groups')}
                 </dt>
@@ -403,36 +408,16 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
                     </span>
                   )}
                 </dd>
-              </div>
+              </dl>
             )}
-            {endpoints.length > 0 && (
-              <div className='flex min-w-0 items-baseline gap-1.5'>
-                <dt className='text-muted-foreground shrink-0'>
-                  {t('Endpoints')}
-                </dt>
-                <dd className='flex min-w-0 items-baseline gap-1'>
-                  <span className='truncate' title={endpoints.join(', ')}>
-                    {endpoints.slice(0, 2).join(', ')}
-                  </span>
-                  {endpoints.length > 2 && (
-                    <span
-                      className='text-muted-foreground shrink-0'
-                      title={endpoints.slice(2).join(', ')}
-                    >
-                      +{endpoints.length - 2}
-                    </span>
-                  )}
-                </dd>
-              </div>
-            )}
-          </dl>
+            <div className='ms-auto max-w-[65%] min-w-0 text-right'>
+              <EndpointPolicy policy={props.model.endpoint_policy} />
+            </div>
+          </div>
         )}
       </CardContent>
       <CardFooter className='mt-auto border-0 bg-transparent pt-0'>
-        <ModelPerfBadge
-          perf={props.perf}
-          className='border-border/60 border-t pt-2'
-        >
+        <ModelPerfBadge perf={props.perf} className='pt-1'>
           <Button
             variant='ghost'
             size='sm'

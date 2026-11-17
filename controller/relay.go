@@ -131,6 +131,18 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		return
 	}
 
+	if responses, ok := request.(*dto.OpenAIResponsesRequest); ok {
+		if err := service.PrepareStatefulResponsesRequest(c, responses); err != nil {
+			newAPIError = types.NewError(err, types.ErrorCodeInvalidRequest, types.ErrOptionWithStatusCode(http.StatusBadRequest), types.ErrOptionWithSkipRetry())
+			return
+		}
+	}
+
+	if err := service.ValidateModelCapabilities(c, request); err != nil {
+		newAPIError = types.NewError(err, types.ErrorCode("model_capability_mismatch"), types.ErrOptionWithStatusCode(http.StatusBadRequest), types.ErrOptionWithSkipRetry())
+		return
+	}
+
 	relayInfo, err := relaycommon.GenRelayInfo(c, relayFormat, request, ws)
 	if err != nil {
 		newAPIError = types.NewError(err, types.ErrorCodeGenRelayInfoFailed)

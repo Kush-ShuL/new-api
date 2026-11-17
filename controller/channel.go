@@ -1383,13 +1383,14 @@ func equalStringPtr(a, b *string) bool {
 }
 
 type fetchModelsRequest struct {
-	ChannelID      int     `json:"channel_id"`
-	BaseURL        *string `json:"base_url"`
-	Type           int     `json:"type"`
-	Key            string  `json:"key"`
-	AdvancedCustom *string `json:"advanced_custom"`
-	HeaderOverride *string `json:"header_override"`
-	Proxy          *string `json:"proxy"`
+	ChannelID      int                  `json:"channel_id"`
+	BaseURL        *string              `json:"base_url"`
+	Type           int                  `json:"type"`
+	Key            string               `json:"key"`
+	AdvancedCustom *string              `json:"advanced_custom"`
+	Aggregate      *dto.AggregateConfig `json:"aggregate"`
+	HeaderOverride *string              `json:"header_override"`
+	Proxy          *string              `json:"proxy"`
 }
 
 func buildAdvancedCustomModelPreviewChannel(req fetchModelsRequest) (*model.Channel, error) {
@@ -1399,7 +1400,7 @@ func buildAdvancedCustomModelPreviewChannel(req fetchModelsRequest) (*model.Chan
 		if err != nil {
 			return nil, err
 		}
-		if savedChannel.Type != constant.ChannelTypeAdvancedCustom {
+		if savedChannel.Type != constant.ChannelTypeAdvancedCustom && savedChannel.Type != constant.ChannelTypeAggregate {
 			return nil, fmt.Errorf("channel %d is not an advanced custom channel", req.ChannelID)
 		}
 		channel = savedChannel
@@ -1414,7 +1415,7 @@ func buildAdvancedCustomModelPreviewChannel(req fetchModelsRequest) (*model.Chan
 		}
 	}
 
-	if channel.Type != constant.ChannelTypeAdvancedCustom {
+	if channel.Type != constant.ChannelTypeAdvancedCustom && channel.Type != constant.ChannelTypeAggregate {
 		return nil, fmt.Errorf("channel type must be advanced custom")
 	}
 	if req.BaseURL != nil {
@@ -1423,7 +1424,13 @@ func buildAdvancedCustomModelPreviewChannel(req fetchModelsRequest) (*model.Chan
 	}
 
 	settings := channel.GetOtherSettings()
-	if req.AdvancedCustom != nil {
+	if channel.Type == constant.ChannelTypeAggregate {
+		if req.Aggregate != nil {
+			settings.Aggregate = req.Aggregate
+		} else if req.ChannelID <= 0 {
+			return nil, fmt.Errorf("aggregate is required")
+		}
+	} else if req.AdvancedCustom != nil {
 		rawConfig := strings.TrimSpace(*req.AdvancedCustom)
 		if rawConfig == "" {
 			return nil, fmt.Errorf("advanced_custom is required")
@@ -1472,7 +1479,7 @@ func FetchModels(c *gin.Context) {
 	}
 
 	var channel *model.Channel
-	if req.Type == constant.ChannelTypeAdvancedCustom || req.ChannelID > 0 {
+	if req.Type == constant.ChannelTypeAdvancedCustom || req.Type == constant.ChannelTypeAggregate || req.ChannelID > 0 {
 		var err error
 		channel, err = buildAdvancedCustomModelPreviewChannel(req)
 		if err != nil {

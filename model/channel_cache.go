@@ -36,7 +36,7 @@ func InitChannelCache() {
 	DB.Find(&channels)
 	for _, channel := range channels {
 		newChannelId2channel[channel.Id] = channel
-		if channel.Type == constant.ChannelTypeAdvancedCustom {
+		if constant.IsAdvancedCustomChannel(channel.Type) {
 			if config := channel.GetOtherSettings().AdvancedCustom; config != nil {
 				newChannel2advancedCustomConfig[channel.Id] = config
 			}
@@ -294,7 +294,7 @@ func CacheUpdateChannel(channel *Channel) {
 		channel2advancedCustomConfig = make(map[int]*kitdto.AdvancedCustomConfig)
 	}
 	delete(channel2advancedCustomConfig, channel.Id)
-	if channel.Type == constant.ChannelTypeAdvancedCustom {
+	if constant.IsAdvancedCustomChannel(channel.Type) {
 		if config := channel.GetOtherSettings().AdvancedCustom; config != nil {
 			channel2advancedCustomConfig[channel.Id] = config
 		}

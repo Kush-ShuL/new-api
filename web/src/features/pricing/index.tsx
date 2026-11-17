@@ -62,6 +62,8 @@ export function Pricing() {
     quotaTypeFilter,
     endpointTypeFilter,
     tagFilter,
+    capabilityFilters,
+    setCapabilityFilters,
     tokenUnit,
     viewMode,
     showRechargePrice,
@@ -209,6 +211,8 @@ export function Pricing() {
               vendorFilter={vendorFilter}
               groupFilter={groupFilter}
               tagFilter={tagFilter}
+              capabilityFilters={capabilityFilters}
+              onCapabilityFiltersChange={setCapabilityFilters}
               onQuotaTypeChange={setQuotaTypeFilter}
               onEndpointTypeChange={setEndpointTypeFilter}
               onVendorChange={setVendorFilter}
@@ -241,6 +245,8 @@ export function Pricing() {
                 vendorFilter={vendorFilter}
                 groupFilter={groupFilter}
                 tagFilter={tagFilter}
+                capabilityFilters={capabilityFilters}
+                onCapabilityFiltersChange={setCapabilityFilters}
                 onQuotaTypeChange={setQuotaTypeFilter}
                 onEndpointTypeChange={setEndpointTypeFilter}
                 onVendorChange={setVendorFilter}

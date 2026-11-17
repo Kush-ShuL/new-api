@@ -23,6 +23,7 @@ import { ClaudeSettingsCard } from './claude-settings-card'
 import { GeminiSettingsCard } from './gemini-settings-card'
 import { GlobalSettingsCard } from './global-settings-card'
 import { GrokSettingsCard } from './grok-settings-card'
+import { responsesSummaryModelsSchema } from './responses-summary-schema'
 
 function formatJsonForEditor(value: string, fallback: string) {
   const raw = (value ?? '').toString().trim()
@@ -42,6 +43,19 @@ const MODELS_SECTIONS = [
       <GlobalSettingsCard
         defaultValues={{
           global: {
+            responses_reasoning_encryption:
+              settings['global.responses_reasoning_encryption'] ?? true,
+            responses_reasoning_summary_mode:
+              settings['global.responses_reasoning_summary_mode'] ?? 'match',
+            responses_reasoning_summary_models:
+              responsesSummaryModelsSchema.parse(
+                JSON.parse(
+                  formatJsonForEditor(
+                    settings['global.responses_reasoning_summary_models'],
+                    '{}'
+                  )
+                )
+              ),
             pass_through_request_enabled:
               settings['global.pass_through_request_enabled'],
             thinking_model_blacklist: formatJsonForEditor(
