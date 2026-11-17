@@ -33,7 +33,10 @@ import {
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 
-import { sideDrawerContentClassName } from '@/components/drawer-layout'
+import {
+  sideDrawerContentClassName,
+  sideDrawerFooterClassName,
+} from '@/components/drawer-layout'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import {
@@ -904,7 +907,7 @@ export const ModelPricingEditorPanel = forwardRef<
             {scrollHeader && (
               <div className='mb-4 space-y-3'>{scrollHeader}</div>
             )}
-            <div className='grid min-w-0 items-start gap-4 @min-[960px]/pricing-editor:grid-cols-[minmax(0,1fr)_260px]'>
+            <div className='grid min-w-0 items-start gap-4 @min-[820px]/pricing-editor:grid-cols-[minmax(0,1fr)_220px]'>
               <FieldGroup className='min-w-0'>
                 {warnings.length > 0 && (
                   <Alert variant='destructive'>
@@ -969,7 +972,7 @@ export const ModelPricingEditorPanel = forwardRef<
                     onValueChange={handleModeChange}
                     className='gap-4'
                   >
-                    <TabsList className='w-full flex-wrap group-data-horizontal/tabs:h-auto'>
+                    <TabsList className='max-w-full flex-wrap justify-start group-data-horizontal/tabs:h-auto [&>button]:px-3'>
                       <TabsTrigger value='tiered_expr'>
                         {t('Expression')}
                       </TabsTrigger>
@@ -1186,7 +1189,7 @@ export const ModelPricingEditorPanel = forwardRef<
 
               <aside
                 aria-label={t('Preview')}
-                className='bg-muted/20 min-w-0 rounded-lg border @min-[960px]/pricing-editor:sticky @min-[960px]/pricing-editor:top-0'
+                className='bg-muted/20 min-w-0 rounded-lg border @min-[820px]/pricing-editor:sticky @min-[820px]/pricing-editor:top-0'
               >
                 <div className='border-b px-3 py-2'>
                   <div className='text-sm font-medium'>
@@ -1230,7 +1233,7 @@ export const ModelPricingEditorPanel = forwardRef<
             </div>
           </div>
           {showActions && (
-            <div className='bg-background/95 supports-[backdrop-filter]:bg-background/80 shrink-0 border-t p-3 backdrop-blur'>
+            <div className={sideDrawerFooterClassName('shrink-0 grid-cols-1')}>
               <div className='flex flex-col-reverse gap-2 sm:flex-row sm:justify-end'>
                 {onSave && (
                   <Button

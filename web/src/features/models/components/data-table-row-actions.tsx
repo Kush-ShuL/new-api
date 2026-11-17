@@ -106,19 +106,20 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
               {isEnabled ? <EyeOff size={16} /> : <Eye size={16} />}
             </DropdownMenuShortcut>
           </DropdownMenuItem>
-          <DropdownMenuItem
-            onSelect={(e) => {
-              e.preventDefault()
-              setDeleteConfirmOpen(true)
-            }}
-            className='text-destructive focus:text-destructive'
-          >
-            {t('Delete')}
-            <DropdownMenuShortcut>
-              <Trash2 size={16} />
-            </DropdownMenuShortcut>
-          </DropdownMenuItem>
         </DataTableRowActionMenu>
+      )}
+
+      {model.id > 0 && (
+        <Button
+          variant='ghost'
+          size='icon-sm'
+          className='text-destructive hover:text-destructive shrink-0'
+          aria-label={t('Delete')}
+          title={t('Delete')}
+          onClick={() => setDeleteConfirmOpen(true)}
+        >
+          <Trash2 />
+        </Button>
       )}
 
       {deleteConfirmOpen && (

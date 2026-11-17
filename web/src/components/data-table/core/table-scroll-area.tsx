@@ -62,6 +62,7 @@ export function TableScrollArea(props: {
       const headerHeight = header.offsetHeight
       const viewportWidth = viewport.clientWidth
       const viewportHeight = viewport.clientHeight
+      const glassHeight = Math.min(viewportHeight, table.offsetHeight)
       const scrollbarWidth = viewport.offsetWidth - viewportWidth
       const scrollbarHeight = viewport.offsetHeight - viewportHeight
       const headerOffsets = cells.map(
@@ -86,10 +87,7 @@ export function TableScrollArea(props: {
       }
       const [leftWidth, rightWidth] = widths
       viewport.style.setProperty('--table-viewport-width', `${viewportWidth}px`)
-      viewport.style.setProperty(
-        '--table-viewport-height',
-        `${viewportHeight}px`
-      )
+      viewport.style.setProperty('--table-viewport-height', `${glassHeight}px`)
       viewport.style.setProperty(
         '--table-scrollbar-width',
         `${scrollbarWidth}px`

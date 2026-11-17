@@ -74,6 +74,7 @@ export function useModelsColumns(
         id: 'select',
         header: ({ table }) => (
           <Checkbox
+            className='border-foreground/40'
             checked={table.getIsAllPageRowsSelected()}
             indeterminate={table.getIsSomePageRowsSelected()}
             onCheckedChange={(value) =>
@@ -84,6 +85,7 @@ export function useModelsColumns(
         ),
         cell: ({ row }) => (
           <Checkbox
+            className='border-foreground/40'
             checked={row.getIsSelected()}
             onCheckedChange={(value) => row.toggleSelected(Boolean(value))}
             aria-label={t('Select {{name}}', { name: row.original.model_name })}

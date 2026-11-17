@@ -111,7 +111,7 @@ export function AvailabilityTable(props: { data: AvailabilityData }) {
   )
 
   return (
-    <div className='isolate min-h-0 flex-1 overflow-hidden rounded-xl border-[0.5px]'>
+    <div className='availability-frame isolate min-h-0 flex-1 overflow-hidden rounded-xl border-[0.5px]'>
       <div
         ref={viewportRef}
         className='availability-table h-full overflow-auto [--availability-model-width:calc(var(--spacing)*48)] sm:[--availability-model-width:calc(var(--spacing)*60)]'

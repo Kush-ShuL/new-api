@@ -425,6 +425,15 @@ html[data-glass-ui] .table-scroll-area [data-slot='table-cell'].sticky {
   border-radius: var(--availability-corner-radius);
 }
 
+/* Keep keyboard focus on the rounded frame, clear of the native scrollbars. */
+.availability-frame:has(> .availability-table:focus-visible) {
+  border-color: color-mix(in srgb, var(--ring) 50%, var(--border));
+}
+
+.availability-table:focus-visible {
+  outline: none;
+}
+
 /* Keep glass surfaces separate from table text. Each surface clips its own
    backdrop, so rounded corners stay clipped during compositor scrolling. */
 .availability-glass {

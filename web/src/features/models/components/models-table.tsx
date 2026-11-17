@@ -133,7 +133,6 @@ export function ModelsTable() {
   // eslint-disable-next-line @tanstack/query/exhaustive-deps
   const { data, isLoading, isFetching, isError, error, refetch } = useQuery({
     queryKey: modelsQueryKeys.list({
-      include_channel_models: true,
       keyword: globalFilter,
       vendor: activeVendorFilter,
       status: statusFilterValue,
@@ -146,7 +145,6 @@ export function ModelsTable() {
       if (shouldSearch) {
         return requireServerSuccess(
           await searchModels({
-            include_channel_models: true,
             keyword: globalFilter,
             vendor: activeVendorFilter,
             status: statusFilterValue,
@@ -159,7 +157,6 @@ export function ModelsTable() {
       }
       return requireServerSuccess(
         await getModels({
-          include_channel_models: true,
           p: pagination.pageIndex + 1,
           page_size: pagination.pageSize,
         })

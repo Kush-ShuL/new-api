@@ -168,9 +168,9 @@ export function ModelPricingPanel(props: {
         onDirtyChange={props.onDirtyChange}
         onSave={() => persist()}
         isSaving={save.isPending}
-        className='rounded-none border-0'
+        className='rounded-none border-0 bg-transparent'
         scrollHeader={
-          <>
+          <div className='bg-muted/20 space-y-3 rounded-xl border p-3'>
             <div className='flex flex-wrap items-center justify-between gap-2'>
               <div className='min-w-0 flex-1 break-words'>
                 <p className='text-muted-foreground text-xs'>
@@ -188,10 +188,7 @@ export function ModelPricingPanel(props: {
                 {t('Restore default pricing')}
               </Button>
             </div>
-            <section
-              aria-label={t('Current Billing')}
-              className='space-y-3 border-b pb-3'
-            >
+            <section aria-label={t('Current Billing')} className='space-y-2'>
               <h3 className='text-muted-foreground text-xs'>
                 {!effectivePricing.billing_usage_schema &&
                 entry.plugin_variants?.length ? (
@@ -253,7 +250,7 @@ export function ModelPricingPanel(props: {
                 </Button>
               </div>
             )}
-          </>
+          </div>
         }
       />
       <ConfirmDialog

@@ -259,9 +259,7 @@ export function ModelMutateDrawer(props: {
   return (
     <>
       <Sheet open={props.open} onOpenChange={close}>
-        <SheetContent
-          className={sideDrawerContentClassName('sm:max-w-[1280px]')}
-        >
+        <SheetContent className={sideDrawerContentClassName('sm:max-w-5xl')}>
           <SheetHeader className={sideDrawerHeaderClassName()}>
             <SheetTitle className='pr-6 break-all'>
               {hasModelName ? currentRow?.model_name : t('Create Model')}
@@ -279,9 +277,9 @@ export function ModelMutateDrawer(props: {
               if (value === 'pricing') setPricingVisited(true)
               if (value === 'appearance') setAppearanceVisited(true)
             }}
-            className='shrink-0 px-4'
+            className='shrink-0 px-4 pt-2 sm:px-6'
           >
-            <TabsList className='flex w-full group-data-horizontal/tabs:h-auto [&>button]:flex-1'>
+            <TabsList className='max-w-full flex-wrap justify-start group-data-horizontal/tabs:h-auto [&>button]:flex-none [&>button]:px-3'>
               <TabsTrigger
                 value='metadata'
                 className='h-auto min-w-0 whitespace-normal'

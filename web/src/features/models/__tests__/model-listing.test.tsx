@@ -209,20 +209,24 @@ afterEach(async () => {
   await i18n.changeLanguage('en')
 })
 
-it('requests channel models and distinguishes catalog policy from availability using compact labels', async () => {
-  const { get } = await renderList()
+it('lists explicitly created models and distinguishes catalog policy from availability', async () => {
+  const { get } = await renderList([metadata])
   expect(get).toHaveBeenCalledWith('/api/models/', {
-    params: expect.objectContaining({ include_channel_models: true }),
+    params: expect.not.objectContaining({ include_channel_models: true }),
   })
-  expect(screen.getAllByText('Unavailable')).toHaveLength(3)
+  expect(screen.getByText('Unavailable')).toBeVisible()
   const warning = screen
     .getAllByText('Unavailable')[0]
     .closest('[data-slot="status-badge"]')
   expect(warning).toHaveClass('text-warning')
   expect(warning?.querySelector('svg')).toBeInTheDocument()
   expect(warning).not.toHaveClass('text-success')
-  expect(screen.getAllByText('Missing metadata')).toHaveLength(2)
-  expect(screen.getAllByText('Channels 0 · Groups 0')).toHaveLength(3)
+  expect(screen.queryByText('Missing metadata')).not.toBeInTheDocument()
+  expect(screen.getByText('Channels 0 · Groups 0')).toBeVisible()
+  expect(screen.getByRole('checkbox', { name: 'Select all' })).toBeVisible()
+  expect(
+    screen.getByRole('button', { name: 'Delete', exact: true })
+  ).toBeVisible()
   expect(
     screen.queryByText(
       'No channel is configured. This model will not appear in the model square.'
