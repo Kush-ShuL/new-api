@@ -26,6 +26,7 @@ import {
   staticDataTableClassNames as tableStyles,
 } from '@/components/data-table'
 import { GroupBadge } from '@/components/group-badge'
+import { LoadingState } from '@/components/loading-state'
 import { getPerfMetrics } from '@/features/performance-metrics/api'
 import {
   formatLatency,
@@ -161,8 +162,12 @@ export function ModelDetailsPerformance(props: { model: PricingModel }) {
 
   if (metricsQuery.isLoading || performances.length === 0) {
     return (
-      <div className='text-muted-foreground rounded-lg border p-6 text-center text-sm'>
-        {t('Performance data is not yet available for this model.')}
+      <div className='bg-background text-muted-foreground grid min-h-64 place-items-center rounded-lg border p-6 text-center text-sm sm:min-h-72'>
+        {metricsQuery.isLoading ? (
+          <LoadingState size='sm' inline />
+        ) : (
+          t('Performance data is not yet available for this model.')
+        )}
       </div>
     )
   }

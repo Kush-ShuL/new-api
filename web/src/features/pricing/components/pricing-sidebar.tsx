@@ -63,7 +63,7 @@ type FilterOption = {
   icon?: ReactNode
 }
 
-type FilterSectionProps = {
+type ChoiceFilterProps = {
   title: string
   value: string
   options: FilterOption[]
@@ -136,7 +136,7 @@ function FilterChip(props: {
   )
 }
 
-function FilterSection(props: FilterSectionProps) {
+function FilterSection(props: { title: string; children: ReactNode }) {
   return (
     <Collapsible
       defaultOpen
@@ -148,19 +148,25 @@ function FilterSection(props: FilterSectionProps) {
         </span>
         <ChevronDown className='text-muted-foreground size-4 transition-transform group-data-[panel-open]:rotate-180' />
       </CollapsibleTrigger>
-      <CollapsibleContent>
-        <div className='flex flex-wrap gap-1.5'>
-          {props.options.map((option) => (
-            <FilterChip
-              key={option.value}
-              option={option}
-              active={props.value === option.value}
-              onClick={() => props.onChange(option.value)}
-            />
-          ))}
-        </div>
-      </CollapsibleContent>
+      <CollapsibleContent>{props.children}</CollapsibleContent>
     </Collapsible>
+  )
+}
+
+function ChoiceFilter(props: ChoiceFilterProps) {
+  return (
+    <FilterSection title={props.title}>
+      <div className='flex flex-wrap gap-1.5'>
+        {props.options.map((option) => (
+          <FilterChip
+            key={option.value}
+            option={option}
+            active={props.value === option.value}
+            onClick={() => props.onChange(option.value)}
+          />
+        ))}
+      </div>
+    </FilterSection>
   )
 }
 
@@ -176,8 +182,7 @@ function ModalityFilter(props: {
       ? MODEL_INPUT_MODALITY_OPTIONS
       : MODEL_MODALITY_OPTIONS
   return (
-    <div className='space-y-1'>
-      <p className='text-muted-foreground text-xs font-medium'>{props.title}</p>
+    <FilterSection title={props.title}>
       <ToggleGroup
         multiple
         value={props.value}
@@ -208,7 +213,7 @@ function ModalityFilter(props: {
           </Tooltip>
         ))}
       </ToggleGroup>
-    </div>
+    </FilterSection>
   )
 }
 
@@ -361,31 +366,31 @@ export const PricingSidebar = memo(function PricingSidebar(
       )}
 
       <div className='space-y-1'>
-        <FilterSection
+        <ChoiceFilter
           title={t('Groups')}
           value={props.groupFilter}
           options={groupOptions}
           onChange={props.onGroupChange}
         />
-        <FilterSection
+        <ChoiceFilter
           title={t('All Vendors')}
           value={props.vendorFilter}
           options={vendorOptions}
           onChange={props.onVendorChange}
         />
-        <FilterSection
+        <ChoiceFilter
           title={t('Model Tags')}
           value={props.tagFilter}
           options={tagOptions}
           onChange={props.onTagChange}
         />
-        <FilterSection
+        <ChoiceFilter
           title={t('Pricing Type')}
           value={props.quotaTypeFilter}
           options={quotaOptions}
           onChange={props.onQuotaTypeChange}
         />
-        <FilterSection
+        <ChoiceFilter
           title={t('Model type')}
           value={props.capabilityFilters.modelType}
           options={modelTypeOptions}
@@ -393,25 +398,23 @@ export const PricingSidebar = memo(function PricingSidebar(
             props.onCapabilityFiltersChange({ modelType })
           }
         />
-        <div className='border-border/70 space-y-2.5 border-b py-3'>
-          <ModalityFilter
-            direction='input'
-            title={t('Input')}
-            value={props.capabilityFilters.inputModalities}
-            onChange={(inputModalities) =>
-              props.onCapabilityFiltersChange({ inputModalities })
-            }
-          />
-          <ModalityFilter
-            direction='output'
-            title={t('Output')}
-            value={props.capabilityFilters.outputModalities}
-            onChange={(outputModalities) =>
-              props.onCapabilityFiltersChange({ outputModalities })
-            }
-          />
-        </div>
-        <FilterSection
+        <ModalityFilter
+          direction='input'
+          title={t('Input')}
+          value={props.capabilityFilters.inputModalities}
+          onChange={(inputModalities) =>
+            props.onCapabilityFiltersChange({ inputModalities })
+          }
+        />
+        <ModalityFilter
+          direction='output'
+          title={t('Output')}
+          value={props.capabilityFilters.outputModalities}
+          onChange={(outputModalities) =>
+            props.onCapabilityFiltersChange({ outputModalities })
+          }
+        />
+        <ChoiceFilter
           title={t('Context length')}
           value={String(props.capabilityFilters.minContext)}
           options={[
@@ -425,7 +428,7 @@ export const PricingSidebar = memo(function PricingSidebar(
             props.onCapabilityFiltersChange({ minContext: Number(value) })
           }
         />
-        <FilterSection
+        <ChoiceFilter
           title={t('Endpoint Type')}
           value={props.endpointTypeFilter}
           options={endpointOptions}

@@ -198,6 +198,35 @@ describe('pricing controls', () => {
     })
   })
 
+  it('lets each modality section collapse without clearing its selections', async () => {
+    const user = userEvent.setup()
+    const props = toolbarProps()
+    props.capabilityFilters.inputModalities = ['image']
+    props.capabilityFilters.outputModalities = ['decision']
+    render(<PricingSidebar {...props} />)
+
+    const input = screen.getByRole('button', { name: 'Input' })
+    const output = screen.getByRole('button', { name: 'Output' })
+    await user.click(input)
+    expect(input).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByRole('button', { name: 'Input: Image' })).toBeNull()
+    expect(
+      screen.getByRole('button', { name: 'Output: Decision' })
+    ).toBeVisible()
+
+    await user.click(output)
+    await user.click(input)
+    expect(output).toHaveAttribute('aria-expanded', 'false')
+    expect(
+      screen.getByRole('button', { name: 'Input: Image' })
+    ).toHaveAttribute('aria-pressed', 'true')
+    await user.click(output)
+    expect(
+      screen.getByRole('button', { name: 'Output: Decision' })
+    ).toHaveAttribute('aria-pressed', 'true')
+    expect(props.onCapabilityFiltersChange).not.toHaveBeenCalled()
+  })
+
   it.each<{
     name: string
     pricing: Partial<PricingModel>
