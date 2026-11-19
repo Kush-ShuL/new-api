@@ -33,6 +33,7 @@ import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { CopyButton } from '@/components/copy-button'
+import { CurrencyText } from '@/components/currency-display'
 import { StaticDataTable } from '@/components/data-table'
 import { sideDrawerContentClassName } from '@/components/drawer-layout'
 import { GroupBadge } from '@/components/group-badge'
@@ -749,7 +750,9 @@ function PriceSection(props: {
                     <DynamicPriceEntryLabel entry={entry} />
                   </div>
                   <div className='text-foreground mt-1 font-mono text-base font-semibold tabular-nums'>
-                    {entry.formattedRange ?? entry.formatted}
+                    <CurrencyText embedded={!!entry.formattedRange}>
+                      {entry.formattedRange ?? entry.formatted}
+                    </CurrencyText>
                     <span className='text-muted-foreground/40 ml-1 text-xs font-normal'>
                       / {unitLabel}
                     </span>
@@ -784,7 +787,9 @@ function PriceSection(props: {
                       <DynamicPriceEntryLabel entry={entry} />
                     </span>
                     <span className='text-muted-foreground font-mono text-sm tabular-nums'>
-                      {entry.formattedRange ?? entry.formatted}
+                      <CurrencyText embedded={!!entry.formattedRange}>
+                        {entry.formattedRange ?? entry.formatted}
+                      </CurrencyText>
                       <span className='text-muted-foreground/40 ml-1 text-xs font-normal'>
                         / {unitLabel}
                       </span>
@@ -817,14 +822,16 @@ function PriceSection(props: {
             {t('Per request')}
           </span>
           <span className='text-foreground font-mono text-sm font-semibold tabular-nums'>
-            {formatFixedPrice(
-              props.model,
-              baseGroupKey,
-              props.showRechargePrice,
-              props.priceRate,
-              props.usdExchangeRate,
-              baseGroupRatioMap
-            )}
+            <CurrencyText>
+              {formatFixedPrice(
+                props.model,
+                baseGroupKey,
+                props.showRechargePrice,
+                props.priceRate,
+                props.usdExchangeRate,
+                baseGroupRatioMap
+              )}
+            </CurrencyText>
           </span>
         </div>
       </section>
@@ -834,16 +841,18 @@ function PriceSection(props: {
   const secondaryItems = secondaryPriceTypes.filter((p) => p.available)
   const renderPrice = (type: PriceType) => (
     <>
-      {formatGroupPrice(
-        props.model,
-        baseGroupKey,
-        type,
-        props.tokenUnit,
-        props.showRechargePrice,
-        props.priceRate,
-        props.usdExchangeRate,
-        baseGroupRatioMap
-      )}
+      <CurrencyText>
+        {formatGroupPrice(
+          props.model,
+          baseGroupKey,
+          type,
+          props.tokenUnit,
+          props.showRechargePrice,
+          props.priceRate,
+          props.usdExchangeRate,
+          baseGroupRatioMap
+        )}
+      </CurrencyText>
       <span className='text-muted-foreground/40 ml-1 text-xs font-normal'>
         / {tokenUnitLabel}
       </span>
@@ -1278,10 +1287,13 @@ function ProviderGroupPricingSection(
                         ),
                         className: `${thClass} text-right`,
                         cellClassName: 'py-2.5 text-right font-mono',
-                        cell: (tier: (typeof dynamicTiers)[number]) =>
-                          formattedPricesByTier
-                            .get(tier)
-                            ?.get(fieldEntry.field) ?? '-',
+                        cell: (tier: (typeof dynamicTiers)[number]) => (
+                          <CurrencyText>
+                            {formattedPricesByTier
+                              .get(tier)
+                              ?.get(fieldEntry.field) ?? '-'}
+                          </CurrencyText>
+                        ),
                       }
                     }),
                   ]}
@@ -1310,14 +1322,17 @@ function ProviderGroupPricingSection(
                           header: t('Example price'),
                           className: `${thClass} text-right`,
                           cellClassName: 'py-2.5 text-right font-mono',
-                          cell: (row) =>
-                            `≈ ${formatTaskUsageUnitPrice(row.total, {
-                              tokenUnit: props.tokenUnit,
-                              showRechargePrice,
-                              priceRate: props.priceRate,
-                              usdExchangeRate: props.usdExchangeRate,
-                              groupRatioMultiplier: ratio,
-                            })}`,
+                          cell: (row) => (
+                            <CurrencyText embedded>
+                              {`≈ ${formatTaskUsageUnitPrice(row.total, {
+                                tokenUnit: props.tokenUnit,
+                                showRechargePrice,
+                                priceRate: props.priceRate,
+                                usdExchangeRate: props.usdExchangeRate,
+                                groupRatioMultiplier: ratio,
+                              })}`}
+                            </CurrencyText>
+                          ),
                         },
                       ]}
                     />
@@ -1353,26 +1368,32 @@ function ProviderGroupPricingSection(
     )
   }
 
-  const renderGroupPrice = (group: string, type: PriceType) =>
-    formatGroupPrice(
-      props.model,
-      group,
-      type,
-      props.tokenUnit,
-      showRechargePrice,
-      props.priceRate,
-      props.usdExchangeRate,
-      props.groupRatio
-    )
-  const renderFixedGroupPrice = (group: string) =>
-    formatFixedPrice(
-      props.model,
-      group,
-      showRechargePrice,
-      props.priceRate,
-      props.usdExchangeRate,
-      props.groupRatio
-    )
+  const renderGroupPrice = (group: string, type: PriceType) => (
+    <CurrencyText>
+      {formatGroupPrice(
+        props.model,
+        group,
+        type,
+        props.tokenUnit,
+        showRechargePrice,
+        props.priceRate,
+        props.usdExchangeRate,
+        props.groupRatio
+      )}
+    </CurrencyText>
+  )
+  const renderFixedGroupPrice = (group: string) => (
+    <CurrencyText>
+      {formatFixedPrice(
+        props.model,
+        group,
+        showRechargePrice,
+        props.priceRate,
+        props.usdExchangeRate,
+        props.groupRatio
+      )}
+    </CurrencyText>
+  )
 
   return (
     <section>

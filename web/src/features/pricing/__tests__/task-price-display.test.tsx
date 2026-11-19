@@ -264,6 +264,54 @@ afterEach(async () => {
   await i18next.changeLanguage('en')
 })
 
+it('shows the uploaded currency icon in base, tiered and group prices', () => {
+  const store = useSystemConfigStore.getState()
+  const previous = store.config.currency
+  store.setConfig({
+    currency: {
+      ...DEFAULT_CURRENCY_CONFIG,
+      quotaDisplayType: 'CUSTOM',
+      customCurrencySymbol: '🍥',
+      customCurrencyIcon: '/coin.png',
+    },
+  })
+  const client = new QueryClient()
+  clients.push(client)
+  try {
+    render(
+      <QueryClientProvider client={client}>
+        <ModelDetailsContent
+          model={{
+            ...model,
+            model_name: 'tiered-text-model',
+            billing_usage_schema: undefined,
+            billing_expr:
+              'len <= 272000 ? tier("standard", p * 8 + c * 40 + cr * 0.4) : tier("long_context", p * 16 + c * 60 + cr * 0.8)',
+          }}
+          groupRatio={{ default: 2 }}
+          usableGroup={{ default: { desc: '', ratio: 2 } }}
+          endpointMap={{}}
+          autoGroups={[]}
+          priceRate={1}
+          usdExchangeRate={1}
+          tokenUnit='M'
+        />
+      </QueryClientProvider>
+    )
+    for (const amount of ['8', '8.0000', '16']) {
+      const prices = screen.getAllByText(amount, { exact: true })
+      for (const price of prices) {
+        expect(price.parentElement?.querySelector('img')).toHaveAttribute(
+          'src',
+          '/coin.png'
+        )
+      }
+    }
+  } finally {
+    act(() => store.setConfig({ currency: previous }))
+  }
+})
+
 it('refreshes memoized provider prices when the group or display currency changes', () => {
   const previous = useSystemConfigStore.getState().config.currency
   useSystemConfigStore
