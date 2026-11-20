@@ -144,11 +144,11 @@ export function CompactDateTimeRangePicker({
       </PopoverTrigger>
       <PopoverContent
         align='start'
-        className='w-[min(520px,calc(100vw-2rem))] p-3'
+        className='w-[min(40rem,calc(100vw-2rem))] max-w-(--available-width) p-3'
       >
-        <div className='space-y-3'>
-          <div className='grid gap-2 sm:grid-cols-[1fr_auto_1fr] sm:items-end'>
-            <div className='space-y-1.5'>
+        <div className='@container/date-range flex min-w-0 flex-col gap-3'>
+          <div className='grid gap-2 @min-[37rem]/date-range:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] @min-[37rem]/date-range:items-end'>
+            <div className='flex min-w-0 flex-col gap-1.5'>
               <div className='text-muted-foreground text-xs'>
                 {t('Start Time')}
               </div>
@@ -161,10 +161,10 @@ export function CompactDateTimeRangePicker({
                 className='h-8 text-sm leading-5 tabular-nums'
               />
             </div>
-            <span className='text-muted-foreground hidden pb-2 text-xs sm:block'>
+            <span className='text-muted-foreground hidden pb-2 text-xs @min-[37rem]/date-range:block'>
               ~
             </span>
-            <div className='space-y-1.5'>
+            <div className='flex min-w-0 flex-col gap-1.5'>
               <div className='text-muted-foreground text-xs'>
                 {t('End Time')}
               </div>

@@ -21,6 +21,7 @@ import { HugeiconsIcon } from '@hugeicons/react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 
+import { CurrencyText } from '@/components/currency-display'
 import { Dialog } from '@/components/dialog'
 import { StatusBadge } from '@/components/status-badge'
 import { Label } from '@/components/ui/label'
@@ -221,14 +222,18 @@ export function TaskDetailsDialog(props: TaskDetailsDialogProps) {
                   url
                 )
               )
+              const occurrences = new Map<string, number>()
               return safeImages?.length ? (
                 <div key={label} className='space-y-1.5 pt-2'>
                   <span className='text-muted-foreground text-xs'>{label}</span>
                   <div className='grid grid-cols-2 gap-2 sm:grid-cols-3'>
-                    {safeImages.map((url, index) =>
-                      url.startsWith('data:') ? (
+                    {safeImages.map((url, index) => {
+                      const occurrence = (occurrences.get(url) ?? 0) + 1
+                      occurrences.set(url, occurrence)
+                      const key = `${url}:${occurrence}`
+                      return url.startsWith('data:') ? (
                         <img
-                          key={index}
+                          key={key}
                           src={url}
                           alt={label}
                           loading='lazy'
@@ -236,7 +241,7 @@ export function TaskDetailsDialog(props: TaskDetailsDialogProps) {
                         />
                       ) : (
                         <a
-                          key={index}
+                          key={key}
                           href={url}
                           target='_blank'
                           rel='noopener noreferrer'
@@ -245,7 +250,7 @@ export function TaskDetailsDialog(props: TaskDetailsDialogProps) {
                           {t('Open image')} {number(index + 1)}
                         </a>
                       )
-                    )}
+                    })}
                   </div>
                 </div>
               ) : null
@@ -281,7 +286,9 @@ export function TaskDetailsDialog(props: TaskDetailsDialogProps) {
             <DetailRow label={t('Group')} value={props.log.group || '-'} />
             <DetailRow
               label={t('Quota')}
-              value={formatLogQuota(props.log.quota)}
+              value={
+                <CurrencyText>{formatLogQuota(props.log.quota)}</CurrencyText>
+              }
               mono
             />
             {props.log.admin_info?.request_id ? (
