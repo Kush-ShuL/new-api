@@ -219,7 +219,7 @@ func PrepareStatefulResponsesRequest(c *gin.Context, request *dto.OpenAIResponse
 			combined = append(combined, response.Output...)
 			input = append(combined, input...)
 			request.PreviousResponseID = ""
-			c.Set("responses_context_expanded", true)
+			c.Set("responses_input_rewritten", true)
 		}
 	}
 	for i, raw := range input {
@@ -236,7 +236,7 @@ func PrepareStatefulResponsesRequest(c *gin.Context, request *dto.OpenAIResponse
 			return err
 		}
 		delete(item, "encrypted_content")
-		c.Set("responses_context_expanded", true)
+		c.Set("responses_input_rewritten", true)
 		item["summary"] = []map[string]string{{"type": "summary_text", "text": text}}
 		input[i], err = common.Marshal(item)
 		if err != nil {

@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
@@ -17,6 +18,7 @@ import (
 	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/relaykit/relayconvert"
 	"github.com/QuantumNous/new-api/relaykit/types"
+	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/config"
 	"github.com/QuantumNous/new-api/setting/model_setting"
 	"github.com/QuantumNous/new-api/setting/request_plugin_setting"
@@ -148,6 +150,74 @@ func TestPrepareResponsesRequestDeepSeekEffectiveReasoning(t *testing.T) {
 			} else {
 				assert.JSONEq(t, input, gjson.GetBytes(wire, "input").Raw)
 			}
+		})
+	}
+}
+
+func TestResponsesHTTPContinuationRestoresMissingToolCallID(t *testing.T) {
+	const toolCall = `{"type":"function_call","id":"fc_lookup","call_id":"call_lookup","name":"lookup","arguments":"{}"}`
+	const anotherCall = `{"type":"function_call","id":"fc_other","call_id":"call_other","name":"lookup","arguments":"{}"}`
+	for _, tc := range []struct {
+		name, calls, input, wantID string
+	}{
+		{"one pending call", toolCall, `{"type":"function_call_output","output":"7"}`, "call_lookup"},
+		{"reference to call item", toolCall + "," + anotherCall, `{"type":"function_call_output","id":"fc_other","output":"7"}`, "call_other"},
+		{"explicit call ID", toolCall + "," + anotherCall, `{"type":"function_call_output","call_id":"call_other","output":"7"}`, "call_other"},
+		{"ambiguous pending calls", toolCall + "," + anotherCall, `{"type":"function_call_output","output":"7"}`, ""},
+		{"answer from an earlier turn", toolCall, `{"role":"user","content":"new question"},{"type":"function_call_output","output":"7"}`, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			submitted := make(chan []byte, 1)
+			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				body, err := io.ReadAll(r.Body)
+				if err != nil {
+					http.Error(w, "cannot read request", http.StatusBadRequest)
+					return
+				}
+				submitted <- body
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = io.WriteString(w, `{"id":"resp_next","status":"completed","output":[],"usage":{"input_tokens":3,"output_tokens":2,"total_tokens":5}}`)
+			}))
+			t.Cleanup(upstream.Close)
+
+			raw := `{"model":"test-model","previous_response_id":"resp_previous","store":false,"input":[` + tc.input + `]}`
+			recorder := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(recorder)
+			c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(raw))
+			c.Request.Header.Set("Content-Type", "application/json")
+			c.Set("responses_session_context", &service.ResponsesSessionContext{
+				ID: "resp_previous",
+				Context: &service.ResponsesStoredContext{
+					Input:     []common.RawMessage{[]byte(`{"role":"user","content":"look it up"}`)},
+					Response:  []byte(`{"output":[` + tc.calls + `]}`),
+					ExpiresAt: time.Now().Add(time.Hour).Unix(),
+				},
+			})
+			common.SetContextKey(c, constant.ContextKeyOriginalModel, "test-model")
+			common.SetContextKey(c, constant.ContextKeyChannelType, constant.ChannelTypeOpenAI)
+			common.SetContextKey(c, constant.ContextKeyChannelBaseUrl, upstream.URL)
+			common.SetContextKey(c, constant.ContextKeyChannelSetting, dto.ChannelSettings{PassThroughBodyEnabled: true})
+			var request dto.OpenAIResponsesRequest
+			require.NoError(t, common.UnmarshalJsonStr(raw, &request))
+			require.NoError(t, service.PrepareStatefulResponsesRequest(c, &request))
+			info := relaycommon.GenRelayInfoResponses(c, &request)
+			_, apiErr := relayResponsesHTTP(c, info, &request)
+			if tc.wantID == "" {
+				require.NotNil(t, apiErr)
+				assert.Equal(t, http.StatusBadRequest, apiErr.StatusCode)
+				assert.Contains(t, apiErr.Error(), "call_id is required")
+				assert.Empty(t, submitted)
+				return
+			}
+			require.Nil(t, apiErr)
+			require.Len(t, submitted, 1)
+			wire := <-submitted
+			assert.False(t, gjson.GetBytes(wire, "previous_response_id").Exists())
+			items := gjson.GetBytes(wire, "input").Array()
+			require.GreaterOrEqual(t, len(items), 3)
+			assert.Equal(t, "look it up", items[0].Get("content").String())
+			assert.Equal(t, tc.wantID, items[len(items)-1].Get("call_id").String())
+			assert.Equal(t, "7", items[len(items)-1].Get("output").String())
 		})
 	}
 }

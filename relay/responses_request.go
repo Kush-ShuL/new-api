@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/MoeForge/moego/ojson"
 	"github.com/QuantumNous/new-api/common"
@@ -52,7 +53,7 @@ func PrepareResponsesRequest(c *gin.Context, info *relaycommon.RelayInfo, req *d
 		return nil, nil, nil, types.NewError(fmt.Errorf("invalid api type: %d", info.ApiType), types.ErrorCodeInvalidApiType, types.ErrOptionWithSkipRetry())
 	}
 	adaptor.Init(info)
-	if (model_setting.GetGlobalSettings().PassThroughRequestEnabled || info.ChannelSetting.PassThroughBodyEnabled) && !c.GetBool("responses_http_bridge") && !c.GetBool("responses_ws_native") && !c.GetBool("responses_context_expanded") && len(request.ContextManagement) == 0 {
+	if (model_setting.GetGlobalSettings().PassThroughRequestEnabled || info.ChannelSetting.PassThroughBodyEnabled) && !c.GetBool("responses_http_bridge") && !c.GetBool("responses_ws_native") && !c.GetBool("responses_input_rewritten") && len(request.ContextManagement) == 0 {
 		storage, err := common.GetBodyStorage(c)
 		if err != nil {
 			return nil, nil, nil, types.NewError(err, types.ErrorCodeReadRequestBodyFailed, types.ErrOptionWithSkipRetry())
@@ -149,4 +150,72 @@ func PrepareResponsesRequest(c *gin.Context, info *relaycommon.RelayInfo, req *d
 		return nil, nil, nil, types.NewError(err, types.ErrorCodeConvertRequestFailed, types.ErrOptionWithSkipRetry())
 	}
 	return adaptor, body, closer, nil
+}
+
+// Resolve missing call IDs against the tool calls in the expanded HTTP input.
+// Never bind an unlabelled result to one of several outstanding calls.
+// A nil result means the original input can be forwarded unchanged.
+func resolveHTTPResponsesToolOutputs(input common.RawMessage) (common.RawMessage, error) {
+	if common.GetJsonType(input) != "array" {
+		return nil, nil
+	}
+	var items []common.RawMessage
+	if err := common.Unmarshal(input, &items); err != nil {
+		return nil, err
+	}
+	type pendingCall struct {
+		kind   string
+		itemID string
+	}
+	pending := make(map[string]pendingCall)
+	changed := false
+	for i, item := range items {
+		kind := ojson.GetBytesNoCopy(item, "type").String()
+		callID := ojson.GetBytesNoCopy(item, "call_id").String()
+		switch kind {
+		case "function_call", "custom_tool_call":
+			if callID != "" {
+				pending[callID] = pendingCall{kind: kind, itemID: ojson.GetBytesNoCopy(item, "id").String()}
+			}
+		case "message":
+			clear(pending)
+		case "function_call_output", "custom_tool_call_output":
+			if callID != "" {
+				delete(pending, callID)
+				continue
+			}
+			callKind := strings.TrimSuffix(kind, "_output")
+			itemID := ojson.GetBytesNoCopy(item, "id").String()
+			matches := 0
+			for id, call := range pending {
+				if call.kind != callKind {
+					continue
+				}
+				callID = id
+				matches++
+				if itemID != "" && (itemID == id || itemID == call.itemID) {
+					matches = 1
+					break
+				}
+			}
+			if matches != 1 {
+				return nil, fmt.Errorf("input[%d].call_id is required: no unique matching call for %s", i, kind)
+			}
+			var err error
+			items[i], err = ojson.SetBytes(item, "call_id", callID)
+			if err != nil {
+				return nil, err
+			}
+			delete(pending, callID)
+			changed = true
+		case "":
+			if ojson.GetBytesNoCopy(item, "role").String() != "" {
+				clear(pending)
+			}
+		}
+	}
+	if !changed {
+		return nil, nil
+	}
+	return common.Marshal(items)
 }
