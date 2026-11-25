@@ -152,10 +152,9 @@ func PrepareResponsesRequest(c *gin.Context, info *relaycommon.RelayInfo, req *d
 	return adaptor, body, closer, nil
 }
 
-// Resolve missing call IDs against the tool calls in the expanded HTTP input.
-// Never bind an unlabelled result to one of several outstanding calls.
+// Normalize Codex goal context and resolve missing tool IDs in expanded HTTP input.
 // A nil result means the original input can be forwarded unchanged.
-func resolveHTTPResponsesToolOutputs(input common.RawMessage) (common.RawMessage, error) {
+func normalizeHTTPResponsesInput(input common.RawMessage) (common.RawMessage, error) {
 	if common.GetJsonType(input) != "array" {
 		return nil, nil
 	}
@@ -183,6 +182,26 @@ func resolveHTTPResponsesToolOutputs(input common.RawMessage) (common.RawMessage
 			if callID != "" {
 				delete(pending, callID)
 				continue
+			}
+			if kind == "function_call_output" &&
+				ojson.GetBytesNoCopy(item, "namespace").String() == "agent" &&
+				ojson.GetBytesNoCopy(item, "name").String() == "goal_objective" {
+				output := ojson.GetBytesNoCopy(item, "output")
+				if output.Type == ojson.String {
+					// Codex inserts goal context without a corresponding tool call.
+					// Keep its text at user priority when forwarding it over HTTP.
+					var err error
+					items[i], err = common.Marshal(map[string]any{
+						"type":    "message",
+						"role":    "user",
+						"content": []map[string]string{{"type": "input_text", "text": output.String()}},
+					})
+					if err != nil {
+						return nil, err
+					}
+					changed = true
+					continue
+				}
 			}
 			callKind := strings.TrimSuffix(kind, "_output")
 			itemID := ojson.GetBytesNoCopy(item, "id").String()

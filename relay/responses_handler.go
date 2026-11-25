@@ -79,7 +79,7 @@ func ResponsesHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *
 // relayResponsesHTTP shares request preparation and protocol conversion between
 // HTTP and the WebSocket bridge. Each transport settles the returned usage once.
 func relayResponsesHTTP(c *gin.Context, info *relaycommon.RelayInfo, request *dto.OpenAIResponsesRequest) (*dto.Usage, *types.NewAPIError) {
-	input, err := resolveHTTPResponsesToolOutputs(request.Input)
+	input, err := normalizeHTTPResponsesInput(request.Input)
 	if err != nil {
 		return nil, types.NewErrorWithStatusCode(err, types.ErrorCodeInvalidRequest, http.StatusBadRequest, types.ErrOptionWithSkipRetry())
 	}

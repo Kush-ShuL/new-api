@@ -154,17 +154,22 @@ func TestPrepareResponsesRequestDeepSeekEffectiveReasoning(t *testing.T) {
 	}
 }
 
-func TestResponsesHTTPContinuationRestoresMissingToolCallID(t *testing.T) {
+func TestResponsesHTTPContinuationNormalizesToolOutputs(t *testing.T) {
 	const toolCall = `{"type":"function_call","id":"fc_lookup","call_id":"call_lookup","name":"lookup","arguments":"{}"}`
 	const anotherCall = `{"type":"function_call","id":"fc_other","call_id":"call_other","name":"lookup","arguments":"{}"}`
+	const goal = `{"type":"function_call_output","id":"fco_goal","namespace":"agent","name":"goal_objective","output":"Goal:\nFinish the report."}`
 	for _, tc := range []struct {
 		name, calls, input, wantID string
+		wantGoal, replayInput      bool
 	}{
-		{"one pending call", toolCall, `{"type":"function_call_output","output":"7"}`, "call_lookup"},
-		{"reference to call item", toolCall + "," + anotherCall, `{"type":"function_call_output","id":"fc_other","output":"7"}`, "call_other"},
-		{"explicit call ID", toolCall + "," + anotherCall, `{"type":"function_call_output","call_id":"call_other","output":"7"}`, "call_other"},
-		{"ambiguous pending calls", toolCall + "," + anotherCall, `{"type":"function_call_output","output":"7"}`, ""},
-		{"answer from an earlier turn", toolCall, `{"role":"user","content":"new question"},{"type":"function_call_output","output":"7"}`, ""},
+		{name: "one pending call", calls: toolCall, input: `{"type":"function_call_output","output":"7"}`, wantID: "call_lookup"},
+		{name: "reference to call item", calls: toolCall + "," + anotherCall, input: `{"type":"function_call_output","id":"fc_other","output":"7"}`, wantID: "call_other"},
+		{name: "explicit call ID", calls: toolCall + "," + anotherCall, input: `{"type":"function_call_output","call_id":"call_other","output":"7"}`, wantID: "call_other"},
+		{name: "ambiguous pending calls", calls: toolCall + "," + anotherCall, input: `{"type":"function_call_output","output":"7"}`},
+		{name: "answer from an earlier turn", calls: toolCall, input: `{"role":"user","content":"new question"},{"type":"function_call_output","output":"7"}`},
+		{name: "client-authored goal context alongside tool history", calls: toolCall + `,{"type":"function_call_output","call_id":"call_lookup","output":"7"}`, input: goal, wantGoal: true},
+		{name: "client-authored goal in a replayed input", input: goal, wantGoal: true, replayInput: true},
+		{name: "ordinary output without an ID or a call remains invalid", input: `{"type":"function_call_output","namespace":"other","name":"goal_objective","output":"7"}`, replayInput: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			submitted := make(chan []byte, 1)
@@ -181,6 +186,9 @@ func TestResponsesHTTPContinuationRestoresMissingToolCallID(t *testing.T) {
 			t.Cleanup(upstream.Close)
 
 			raw := `{"model":"test-model","previous_response_id":"resp_previous","store":false,"input":[` + tc.input + `]}`
+			if tc.replayInput {
+				raw = `{"model":"test-model","store":false,"input":[{"role":"user","content":"look it up"},` + tc.input + `]}`
+			}
 			recorder := httptest.NewRecorder()
 			c, _ := gin.CreateTestContext(recorder)
 			c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(raw))
@@ -202,7 +210,7 @@ func TestResponsesHTTPContinuationRestoresMissingToolCallID(t *testing.T) {
 			require.NoError(t, service.PrepareStatefulResponsesRequest(c, &request))
 			info := relaycommon.GenRelayInfoResponses(c, &request)
 			_, apiErr := relayResponsesHTTP(c, info, &request)
-			if tc.wantID == "" {
+			if tc.wantID == "" && !tc.wantGoal {
 				require.NotNil(t, apiErr)
 				assert.Equal(t, http.StatusBadRequest, apiErr.StatusCode)
 				assert.Contains(t, apiErr.Error(), "call_id is required")
@@ -214,10 +222,18 @@ func TestResponsesHTTPContinuationRestoresMissingToolCallID(t *testing.T) {
 			wire := <-submitted
 			assert.False(t, gjson.GetBytes(wire, "previous_response_id").Exists())
 			items := gjson.GetBytes(wire, "input").Array()
-			require.GreaterOrEqual(t, len(items), 3)
+			require.GreaterOrEqual(t, len(items), 2)
 			assert.Equal(t, "look it up", items[0].Get("content").String())
-			assert.Equal(t, tc.wantID, items[len(items)-1].Get("call_id").String())
-			assert.Equal(t, "7", items[len(items)-1].Get("output").String())
+			last := items[len(items)-1]
+			if tc.wantGoal {
+				assert.JSONEq(t, `{"type":"message","role":"user","content":[{"type":"input_text","text":"Goal:\nFinish the report."}]}`, last.Raw)
+				if !tc.replayInput {
+					assert.Equal(t, "call_lookup", items[len(items)-2].Get("call_id").String())
+				}
+				return
+			}
+			assert.Equal(t, tc.wantID, last.Get("call_id").String())
+			assert.Equal(t, "7", last.Get("output").String())
 		})
 	}
 }
